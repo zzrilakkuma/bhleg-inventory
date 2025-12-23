@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { itemsApi, recordsApi, uploadImages } from '@/lib/supabase-client';
 
 // 類別定義
 const CATEGORIES = [
@@ -69,7 +70,7 @@ function NewItemForm() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // 驗證必填欄位
     if (!name.trim()) {
       toast.error('請輸入物品名稱');
@@ -84,49 +85,44 @@ function NewItemForm() {
       return;
     }
 
-    // 建立新物品物件
-    const itemId = Date.now();
-    const timestamp = new Date().toISOString();
-    const newItem = {
-      id: itemId,
-      name,
-      category,
-      unit,
-      stock: Number(initialStock),
-      isRegularItem,
-      warningThreshold: null,  // 須留意門檻（由管理員設定）
-      criticalThreshold: null, // 待補充門檻（由管理員設定）
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+    try {
+      // 如果有圖片，先處理上傳
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        toast.loading('正在上傳圖片...', { id: 'uploading' });
+        imageUrls = await uploadImages('record-images', images);
+        toast.dismiss('uploading');
+      }
 
-    // 暫時儲存到 localStorage（之後會連接資料庫）
-    const existingItems = JSON.parse(localStorage.getItem('items') || '[]');
-    existingItems.push(newItem);
-    localStorage.setItem('items', JSON.stringify(existingItems));
-
-    // 如果初始庫存大於 0，建立初始入庫記錄
-    if (Number(initialStock) > 0) {
-      const records = JSON.parse(localStorage.getItem('records') || '[]');
-      records.unshift({
-        id: Date.now() + 1, // 確保 ID 不重複
-        type: 'in',
-        itemId: itemId,
-        itemName: name,
-        quantity: Number(initialStock),
-        unit: unit,
-        note: note || '初始建立',  // 使用使用者輸入的備註，若無則顯示「初始建立」
-        images: images,  // 儲存上傳的圖片到記錄中
-        timestamp: timestamp,
-        user: '訪客',
+      // 建立新物品
+      const newItem = await itemsApi.create({
+        name,
+        category,
+        unit,
+        stock: 0, 
+        is_regular_item: isRegularItem,
+        notes: note || undefined,
       });
-      localStorage.setItem('records', JSON.stringify(records));
+
+      // 如果初始庫存大於 0，建立初始入庫記錄（包含圖片連結）
+      if (Number(initialStock) > 0) {
+        await recordsApi.create({
+          item_id: newItem.id,
+          type: 'in',
+          quantity: Number(initialStock),
+          reason: note || '初始建立',
+          image_urls: imageUrls, // 這裡將圖片連結存入紀錄
+        } as any);
+      }
+
+      toast.success(`成功新增物品：${name}`);
+
+      // 返回上一頁或指定頁面
+      router.push(returnTo);
+    } catch (error) {
+      console.error('新增物品失敗:', error);
+      toast.error('新增物品失敗，請稍後再試');
     }
-
-    toast.success(`成功新增物品：${name}`);
-
-    // 返回上一頁或指定頁面
-    router.push(returnTo);
   };
 
   return (

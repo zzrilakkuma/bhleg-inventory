@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { itemsApi, recordsApi, uploadImages } from '@/lib/supabase-client';
 import toast from 'react-hot-toast';
 
-export default function RecordInPage() {
+function RecordInForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const itemIdFromUrl = searchParams.get('itemId');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -15,106 +17,127 @@ export default function RecordInPage() {
   const [note, setNote] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // 載入物品列表（從 localStorage + 模擬資料）
+  // 載入物品列表
   useEffect(() => {
-    const mockItems = [
-      { id: 1, name: '醬油（龜甲萬 500ml）', unit: '瓶', stock: 3, category: '食材' },
-      { id: 2, name: '醬油（金蘭 1L）', unit: '瓶', stock: 2, category: '食材' },
-      { id: 3, name: '白米（池上米）', unit: '包', stock: 5, category: '食材' },
-    ];
+    loadItems();
+  }, []);
 
-    // 從 localStorage 讀取使用者新增的物品
-    const storedItems = JSON.parse(localStorage.getItem('items') || '[]');
-
-    // 合併模擬資料和使用者新增的物品
-    const items = [...mockItems, ...storedItems];
-    setAllItems(items);
-
-    // 如果 URL 中有 itemId，自動選擇該物品
-    if (itemIdFromUrl) {
-      const item = items.find(i => i.id === Number(itemIdFromUrl));
+  // 如果 URL 中有 itemId，自動選擇該物品
+  useEffect(() => {
+    if (itemIdFromUrl && allItems.length > 0) {
+      const item = allItems.find(i => i.id === Number(itemIdFromUrl));
       if (item) {
         setSelectedItem(item);
       }
     }
-  }, [itemIdFromUrl]);
+  }, [itemIdFromUrl, allItems]);
 
-  const filteredItems = allItems.filter(item =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const loadItems = async () => {
+    try {
+      setLoading(true);
+      const items = await itemsApi.getAll();
+      setAllItems(items);
+    } catch (err: any) {
+      console.error('載入物品列表失敗:', err);
+      toast.error('載入物品列表失敗');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    // 轉換圖片為 base64 預覽（之後會上傳到雲端）
-    Array.from(files).forEach(file => {
+    if (images.length + files.length > 5) {
+      toast.error('最多只能上傳 5 張照片');
+      return;
+    }
+
+    Array.from(files).forEach((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} 檔案過大，請選擇小於 5MB 的圖片`);
+        return;
+      }
+
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImages(prev => [...prev, reader.result as string]);
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setImages((prev) => [...prev, result]);
       };
       reader.readAsDataURL(file);
     });
   };
 
   const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const filteredItems = allItems.filter(item =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSubmit = async () => {
     if (!selectedItem || !quantity) {
       toast.error('請選擇物品並輸入數量');
       return;
     }
 
     const inQuantity = Number(quantity);
-
-    // 更新 localStorage 中的庫存
-    const storedItems = JSON.parse(localStorage.getItem('items') || '[]');
-    const itemIndex = storedItems.findIndex((item: any) => item.id === selectedItem.id);
-
-    if (itemIndex !== -1) {
-      // 更新使用者新增的物品
-      storedItems[itemIndex].stock = (storedItems[itemIndex].stock || 0) + inQuantity;
-      storedItems[itemIndex].updatedAt = new Date().toISOString();
-      localStorage.setItem('items', JSON.stringify(storedItems));
+    if (isNaN(inQuantity) || inQuantity <= 0) {
+      toast.error('請輸入有效的數量');
+      return;
     }
 
-    // 儲存入庫記錄
-    const records = JSON.parse(localStorage.getItem('records') || '[]');
-    records.unshift({
-      id: Date.now(),
-      type: 'in',
-      itemId: selectedItem.id,
-      itemName: selectedItem.name,
-      quantity: inQuantity,
-      unit: selectedItem.unit,
-      note,
-      images,
-      timestamp: new Date().toISOString(),
-      user: '訪客',
-    });
-    localStorage.setItem('records', JSON.stringify(records));
+    try {
+      setSubmitting(true);
 
-    toast.success(`成功記錄入庫：${selectedItem.name} +${quantity} ${selectedItem.unit}`);
+      // 處理圖片上傳
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        toast.loading('正在上傳圖片...', { id: 'uploading' });
+        imageUrls = await uploadImages('record-images', images);
+        toast.dismiss('uploading');
+      }
 
-    // 清空表單
-    setSearchQuery('');
-    setSelectedItem(null);
-    setQuantity('');
-    setNote('');
-    setImages([]);
+      // 建立入庫記錄
+      await recordsApi.create({
+        item_id: selectedItem.id,
+        type: 'in',
+        quantity: inQuantity,
+        reason: note || '入庫',
+        image_urls: imageUrls,
+      } as any);
 
-    // 重新載入物品列表
-    const mockItems = [
-      { id: 1, name: '醬油（龜甲萬 500ml）', unit: '瓶', stock: 3, category: '食材' },
-      { id: 2, name: '醬油（金蘭 1L）', unit: '瓶', stock: 2, category: '食材' },
-      { id: 3, name: '白米（池上米）', unit: '包', stock: 5, category: '食材' },
-    ];
-    const updatedStoredItems = JSON.parse(localStorage.getItem('items') || '[]');
-    setAllItems([...mockItems, ...updatedStoredItems]);
+      toast.success(`成功記錄入庫：${selectedItem.name} +${quantity} ${selectedItem.unit}`);
+
+      // 清空表單
+      setSearchQuery('');
+      setSelectedItem(null);
+      setQuantity('');
+      setNote('');
+      setImages([]);
+
+      // 重新載入物品列表
+      await loadItems();
+    } catch (err: any) {
+      console.error('入庫失敗:', err);
+      toast.error(err.message || '入庫失敗');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[#00FF41] font-mono">載入中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col px-6 py-8">
@@ -210,7 +233,6 @@ export default function RecordInPage() {
               </label>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  {/* 減少按鈕 */}
                   <button
                     onClick={() => {
                       const current = parseFloat(quantity) || 0;
@@ -222,7 +244,6 @@ export default function RecordInPage() {
                     <span className="text-2xl text-white font-bold">−</span>
                   </button>
 
-                  {/* 數量顯示 */}
                   <div className="flex-1">
                     <input
                       type="number"
@@ -238,7 +259,6 @@ export default function RecordInPage() {
                     />
                   </div>
 
-                  {/* 增加按鈕 */}
                   <button
                     onClick={() => {
                       const current = parseFloat(quantity) || 0;
@@ -250,7 +270,6 @@ export default function RecordInPage() {
                     <span className="text-2xl text-[#00FF41] font-bold">+</span>
                   </button>
                 </div>
-                {/* 單位顯示 */}
                 <div className="text-center">
                   <span className="text-gray-400 font-mono text-sm">{selectedItem.unit}</span>
                 </div>
@@ -274,33 +293,14 @@ export default function RecordInPage() {
               />
             </div>
 
-            {/* 拍照/上傳圖片 */}
+            {/* 上傳照片 */}
             <div>
               <label className="block text-sm text-gray-400 mb-2 font-mono">
-                照片（選填）：
+                上傳照片（選填，最多 5 張）：
               </label>
 
-              {/* 上傳按鈕 */}
-              <label className="block w-full p-4 bg-[#0a0a0a] border border-[#333333] border-dashed rounded hover:border-[#00FF41] transition-colors cursor-pointer text-center">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  multiple
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-3xl">📷</span>
-                  <span className="text-sm text-gray-400 font-mono">
-                    點擊拍照或上傳圖片
-                  </span>
-                </div>
-              </label>
-
-              {/* 圖片預覽 */}
               {images.length > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 mb-3">
                   {images.map((image, index) => (
                     <div key={index} className="relative aspect-square">
                       <img
@@ -310,7 +310,7 @@ export default function RecordInPage() {
                       />
                       <button
                         onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-[#FF0055] rounded-full flex items-center justify-center text-white text-xs hover:bg-[#ff0077] transition-colors"
+                        className="absolute top-1 right-1 w-6 h-6 bg-[#FF0055] rounded-full flex items-center justify-center text-white text-xs hover:bg-[#FF0077] transition-colors"
                       >
                         ✕
                       </button>
@@ -318,21 +318,49 @@ export default function RecordInPage() {
                   ))}
                 </div>
               )}
+
+              {images.length < 5 && (
+                <label className="block w-full p-4 border-2 border-dashed border-[#333333] rounded hover:border-[#00FF41] transition-colors cursor-pointer">
+                  <div className="text-center">
+                    <span className="text-gray-500 font-mono text-sm">📷 點擊上傳照片</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </label>
+              )}
             </div>
 
             {/* 送出按鈕 */}
             <button
               onClick={handleSubmit}
-              className="w-full py-4 bg-gradient-to-br from-[rgba(0,255,65,0.2)] to-transparent border border-[#00FF41] rounded hover:from-[rgba(0,255,65,0.3)] transition-all duration-200 text-[#00FF41] font-semibold"
+              disabled={submitting}
+              className="w-full py-4 bg-gradient-to-br from-[rgba(0,255,65,0.2)] to-transparent border border-[#00FF41] rounded hover:from-[rgba(0,255,65,0.3)] transition-all duration-200 text-[#00FF41] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 boxShadow: '0 0 10px rgba(0, 255, 65, 0.3)'
               }}
             >
-              確認送出
+              {submitting ? '處理中...' : '確認送出'}
             </button>
           </>
         )}
       </main>
     </div>
+  );
+}
+
+export default function RecordInPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[#00FF41] font-mono">載入中...</div>
+      </div>
+    }>
+      <RecordInForm />
+    </Suspense>
   );
 }

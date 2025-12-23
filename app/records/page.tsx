@@ -2,15 +2,34 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { recordsApi } from '@/lib/supabase-client';
+import toast from 'react-hot-toast';
 
 export default function RecordsPage() {
   const [records, setRecords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 從 localStorage 讀取所有記錄
-    const allRecords = JSON.parse(localStorage.getItem('records') || '[]');
-    setRecords(allRecords);
+    loadRecords();
   }, []);
+
+  const loadRecords = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 從 Supabase 讀取所有記錄（包含關聯的物品資料）
+      const data = await recordsApi.getAll();
+      setRecords(data);
+    } catch (err: any) {
+      console.error('載入記錄失敗:', err);
+      setError(err.message || '載入失敗');
+      toast.error('載入記錄失敗');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 計算相對時間
   const getRelativeTime = (dateString: string) => {
@@ -39,6 +58,28 @@ export default function RecordsPage() {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[#00FF41] font-mono">載入中...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-6">
+        <div className="text-[#FF0055] font-mono mb-4">{error}</div>
+        <button
+          onClick={loadRecords}
+          className="text-sm text-gray-500 hover:text-[#00FF41] transition-colors font-mono"
+        >
+          重新載入
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col px-6 py-8">
       {/* Header */}
@@ -61,46 +102,56 @@ export default function RecordsPage() {
         {/* 記錄列表 */}
         <div className="space-y-3">
           {records.length > 0 ? (
-            records.map((record) => (
-              <Link
-                key={record.id}
-                href={`/records/${record.id}`}
-                className="block p-4 bg-[#0a0a0a] border border-[#333333] rounded hover:border-[#00FF41] transition-colors cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <p className="text-white font-medium">
-                      {record.itemName}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className={`text-lg font-bold font-mono ${
-                        record.type === 'in' ? 'text-[#00FF41]' : 'text-[#FF0055]'
-                      }`}>
-                        {record.type === 'in' ? '+' : '-'}{record.quantity} {record.unit}
-                      </span>
-                      {record.images && record.images.length > 0 && (
-                        <span className="text-gray-500 text-sm">📷</span>
-                      )}
+            records.map((record) => {
+              // 從關聯的 items 物件取得物品資料
+              const itemData = record.items;
+
+              return (
+                <Link
+                  key={record.id}
+                  href={`/records/${record.id}`}
+                  className="block p-4 bg-[#0a0a0a] border border-[#333333] rounded hover:border-[#00FF41] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <p className="text-white font-medium">
+                        {itemData?.name || `物品 #${record.item_id}`}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className={`text-lg font-bold font-mono ${
+                          record.type === 'in' ? 'text-[#00FF41]' : 'text-[#FF0055]'
+                        }`}>
+                          {record.type === 'in' ? '+' : '-'}{record.quantity} {itemData?.unit || ''}
+                        </span>
+                        {record.image_urls && record.image_urls.length > 0 && (
+                          <span className="text-xs text-[#00FF41]">📷</span>
+                        )}
+                      </div>
                     </div>
+                    <span className="text-xs text-gray-600 font-mono whitespace-nowrap ml-3">
+                      {getRelativeTime(record.created_at)}
+                    </span>
                   </div>
-                  <span className="text-xs text-gray-600 font-mono whitespace-nowrap ml-3">
-                    {getRelativeTime(record.timestamp)}
-                  </span>
-                </div>
 
-                {record.note && (
-                  <div className="mb-2">
-                    <p className="text-sm text-gray-400">{record.note}</p>
+                  {record.reason && (
+                    <div className="mb-2">
+                      <p className="text-sm text-gray-400">{record.reason}</p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs text-gray-600 font-mono border-t border-[#1a1a1a] pt-3 mt-3">
+                    <div className="flex items-center gap-2">
+                      <span>{formatDate(record.created_at)}</span>
+                      <span className="opacity-30">|</span>
+                      <span>{record.stock_after} {itemData?.unit || ''}</span>
+                    </div>
+                    {record.operator?.name && (
+                      <span className="ml-auto">by {record.operator.name}</span>
+                    )}
                   </div>
-                )}
-
-                <div className="flex items-center gap-2 text-xs text-gray-600 font-mono">
-                  <span>操作人：{record.user}</span>
-                  <span>|</span>
-                  <span>{formatDate(record.timestamp)}</span>
-                </div>
-              </Link>
-            ))
+                </Link>
+              );
+            })
           ) : (
             <div className="p-12 text-center border border-[#333333] border-dashed rounded">
               <p className="text-gray-500 font-mono">尚無任何記錄</p>

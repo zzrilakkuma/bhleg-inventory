@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { itemsApi, Item } from '@/lib/supabase-client';
 
 // 類別定義
 const CATEGORIES = [
@@ -20,22 +21,25 @@ export default function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showRegularItemsOnly, setShowRegularItemsOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('updated');
-  const [allItems, setAllItems] = useState<any[]>([]);
+  const [allItems, setAllItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 載入物品列表（從 localStorage + 模擬資料）
+  // 載入物品列表（從資料庫）
   useEffect(() => {
-    const mockItems = [
-      { id: 1, name: '醬油（龜甲萬 500ml）', unit: '瓶', stock: 3, category: '廚房', isRegularItem: true, updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
-      { id: 2, name: '醬油（金蘭 1L）', unit: '瓶', stock: 2, category: '廚房', isRegularItem: false, updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
-      { id: 3, name: '白米（池上米）', unit: '包', stock: 0, category: '廚房', isRegularItem: true, updatedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString() },
-    ];
-
-    // 從 localStorage 讀取使用者新增的物品
-    const storedItems = JSON.parse(localStorage.getItem('items') || '[]');
-
-    // 合併模擬資料和使用者新增的物品
-    setAllItems([...mockItems, ...storedItems]);
+    loadItems();
   }, []);
+
+  const loadItems = async () => {
+    try {
+      setLoading(true);
+      const items = await itemsApi.getAll();
+      setAllItems(items);
+    } catch (error) {
+      console.error('載入物品失敗:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 篩選邏輯
   const filteredItems = allItems
@@ -47,7 +51,7 @@ export default function InventoryPage() {
       if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
       // 常態性備品篩選
-      if (showRegularItemsOnly && !item.isRegularItem) {
+      if (showRegularItemsOnly && !item.is_regular_item) {
         return false;
       }
 
@@ -56,8 +60,8 @@ export default function InventoryPage() {
     .sort((a, b) => {
       if (sortBy === 'updated') {
         // 按最後更新時間排序（較新的在前）
-        const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-        const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+        const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
         return dateB - dateA;
       } else {
         // 按庫存量排序（較少的在前）
@@ -83,18 +87,17 @@ export default function InventoryPage() {
   };
 
   // 根據門檻判斷庫存狀態
-  const getStockStatus = (item: any) => {
-    const { stock, warningThreshold, criticalThreshold } = item;
+  const getStockStatus = (item: Item) => {
+    const { stock, low_stock_threshold } = item;
 
     // 如果沒有設定門檻，使用預設邏輯
-    if (warningThreshold === null || criticalThreshold === null) {
+    if (!low_stock_threshold) {
       if (stock === 0) return 'critical'; // 🔴 紅色
       return 'sufficient'; // 🟢 綠色
     }
 
-    // 有設定門檻，按照三級制判斷
-    if (stock <= criticalThreshold) return 'critical'; // 🔴 待補充
-    if (stock <= warningThreshold) return 'warning';   // 🟡 須留意
+    // 有設定門檻，檢查是否低於門檻
+    if (stock <= low_stock_threshold) return 'critical'; // 🔴 低於門檻
     return 'sufficient'; // 🟢 充足
   };
 
@@ -200,7 +203,11 @@ export default function InventoryPage() {
 
         {/* 物品列表 */}
         <div className="space-y-3">
-          {filteredItems.length > 0 ? (
+          {loading ? (
+            <div className="p-8 text-center border border-[#333333] border-dashed rounded">
+              <p className="text-gray-500 font-mono">載入中...</p>
+            </div>
+          ) : filteredItems.length > 0 ? (
             filteredItems.map((item) => (
               <Link
                 key={item.id}
@@ -209,9 +216,14 @@ export default function InventoryPage() {
               >
                 <div className="mb-2">
                   <p className="text-white font-medium">
-                    {item.isRegularItem && <span className="mr-2">📌</span>}
+                    {item.is_regular_item && <span className="mr-2">📌</span>}
                     {item.name}
                   </p>
+                  {(item as any).last_record?.reason && (
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">
+                      // {(item as any).last_record.reason}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between text-sm">
@@ -223,7 +235,7 @@ export default function InventoryPage() {
                     </span>
                   </div>
                   <span className="text-xs text-gray-600 font-mono">
-                    {getRelativeTime(item.updatedAt || item.createdAt)}
+                    {getRelativeTime(item.updated_at || item.created_at)}
                   </span>
                 </div>
               </Link>

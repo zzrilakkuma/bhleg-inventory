@@ -1,74 +1,69 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { itemsApi, recordsApi } from '@/lib/supabase-client';
 import toast from 'react-hot-toast';
 
-export default function RecordOutPage() {
+function RecordOutForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const itemIdFromUrl = searchParams.get('itemId');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
-  const [images, setImages] = useState<string[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // 載入物品列表（從 localStorage + 模擬資料）
+  // 載入物品列表
   useEffect(() => {
-    const mockItems = [
-      { id: 1, name: '醬油（龜甲萬 500ml）', unit: '瓶', stock: 3, category: '食材' },
-      { id: 2, name: '醬油（金蘭 1L）', unit: '瓶', stock: 2, category: '食材' },
-      { id: 3, name: '白米（池上米）', unit: '包', stock: 5, category: '食材' },
-    ];
+    loadItems();
+  }, []);
 
-    // 從 localStorage 讀取使用者新增的物品
-    const storedItems = JSON.parse(localStorage.getItem('items') || '[]');
-
-    // 合併模擬資料和使用者新增的物品
-    const items = [...mockItems, ...storedItems];
-    setAllItems(items);
-
-    // 如果 URL 中有 itemId，自動選擇該物品
-    if (itemIdFromUrl) {
-      const item = items.find(i => i.id === Number(itemIdFromUrl));
+  // 如果 URL 中有 itemId，自動選擇該物品
+  useEffect(() => {
+    if (itemIdFromUrl && allItems.length > 0) {
+      const item = allItems.find(i => i.id === Number(itemIdFromUrl));
       if (item) {
         setSelectedItem(item);
       }
     }
-  }, [itemIdFromUrl]);
+  }, [itemIdFromUrl, allItems]);
+
+  const loadItems = async () => {
+    try {
+      setLoading(true);
+      const items = await itemsApi.getAll();
+      setAllItems(items);
+    } catch (err: any) {
+      console.error('載入物品列表失敗:', err);
+      toast.error('載入物品列表失敗');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredItems = allItems.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    // 轉換圖片為 base64 預覽（之後會上傳到雲端）
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImages(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedItem || !quantity) {
       toast.error('請選擇物品並輸入數量');
       return;
     }
 
     const outQuantity = Number(quantity);
+
+    if (isNaN(outQuantity) || outQuantity <= 0) {
+      toast.error('請輸入有效的數量');
+      return;
+    }
+
     const newStock = selectedItem.stock - outQuantity;
 
     // 檢查庫存是否足夠
@@ -90,51 +85,42 @@ export default function RecordOutPage() {
       });
     }
 
-    // 更新 localStorage 中的庫存
-    const storedItems = JSON.parse(localStorage.getItem('items') || '[]');
-    const itemIndex = storedItems.findIndex((item: any) => item.id === selectedItem.id);
+    try {
+      setSubmitting(true);
 
-    if (itemIndex !== -1) {
-      // 更新使用者新增的物品
-      storedItems[itemIndex].stock = newStock;
-      storedItems[itemIndex].updatedAt = new Date().toISOString();
-      localStorage.setItem('items', JSON.stringify(storedItems));
+      // 建立出庫記錄（API 會自動更新庫存並檢查庫存是否足夠）
+      await recordsApi.create({
+        item_id: selectedItem.id,
+        type: 'out',
+        quantity: outQuantity,
+        reason: note || '出庫',
+      });
+
+      toast.success(`成功記錄出庫：${selectedItem.name} -${quantity} ${selectedItem.unit}`);
+
+      // 清空表單
+      setSearchQuery('');
+      setSelectedItem(null);
+      setQuantity('');
+      setNote('');
+
+      // 重新載入物品列表（更新庫存）
+      await loadItems();
+    } catch (err: any) {
+      console.error('出庫失敗:', err);
+      toast.error(err.message || '出庫失敗');
+    } finally {
+      setSubmitting(false);
     }
-
-    // 儲存出庫記錄
-    const records = JSON.parse(localStorage.getItem('records') || '[]');
-    records.unshift({
-      id: Date.now(),
-      type: 'out',
-      itemId: selectedItem.id,
-      itemName: selectedItem.name,
-      quantity: outQuantity,
-      unit: selectedItem.unit,
-      note,
-      images,
-      timestamp: new Date().toISOString(),
-      user: '訪客',
-    });
-    localStorage.setItem('records', JSON.stringify(records));
-
-    toast.success(`成功記錄出庫：${selectedItem.name} -${quantity} ${selectedItem.unit}`);
-
-    // 清空表單
-    setSearchQuery('');
-    setSelectedItem(null);
-    setQuantity('');
-    setNote('');
-    setImages([]);
-
-    // 重新載入物品列表
-    const mockItems = [
-      { id: 1, name: '醬油（龜甲萬 500ml）', unit: '瓶', stock: 3, category: '食材' },
-      { id: 2, name: '醬油（金蘭 1L）', unit: '瓶', stock: 2, category: '食材' },
-      { id: 3, name: '白米（池上米）', unit: '包', stock: 5, category: '食材' },
-    ];
-    const updatedStoredItems = JSON.parse(localStorage.getItem('items') || '[]');
-    setAllItems([...mockItems, ...updatedStoredItems]);
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[#00FF41] font-mono">載入中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col px-6 py-8">
@@ -312,65 +298,32 @@ export default function RecordOutPage() {
               />
             </div>
 
-            {/* 拍照/上傳圖片 */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-2 font-mono">
-                照片（選填）：
-              </label>
-
-              {/* 上傳按鈕 */}
-              <label className="block w-full p-4 bg-[#0a0a0a] border border-[#333333] border-dashed rounded hover:border-[#00FF41] transition-colors cursor-pointer text-center">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  multiple
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-3xl">📷</span>
-                  <span className="text-sm text-gray-400 font-mono">
-                    點擊拍照或上傳圖片
-                  </span>
-                </div>
-              </label>
-
-              {/* 圖片預覽 */}
-              {images.length > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {images.map((image, index) => (
-                    <div key={index} className="relative aspect-square">
-                      <img
-                        src={image}
-                        alt={`預覽 ${index + 1}`}
-                        className="w-full h-full object-cover rounded border border-[#333333]"
-                      />
-                      <button
-                        onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-[#FF0055] rounded-full flex items-center justify-center text-white text-xs hover:bg-[#ff0077] transition-colors"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* 送出按鈕 */}
             <button
               onClick={handleSubmit}
-              className="w-full py-4 bg-gradient-to-br from-[rgba(0,255,65,0.2)] to-transparent border border-[#00FF41] rounded hover:from-[rgba(0,255,65,0.3)] transition-all duration-200 text-[#00FF41] font-semibold"
+              disabled={submitting}
+              className="w-full py-4 bg-gradient-to-br from-[rgba(0,255,65,0.2)] to-transparent border border-[#00FF41] rounded hover:from-[rgba(0,255,65,0.3)] transition-all duration-200 text-[#00FF41] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 boxShadow: '0 0 10px rgba(0, 255, 65, 0.3)'
               }}
             >
-              確認送出
+              {submitting ? '處理中...' : '確認送出'}
             </button>
           </>
         )}
       </main>
     </div>
+  );
+}
+
+export default function RecordOutPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-[#00FF41] font-mono">載入中...</div>
+      </div>
+    }>
+      <RecordOutForm />
+    </Suspense>
   );
 }
