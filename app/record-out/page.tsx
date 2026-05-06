@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { itemsApi, recordsApi } from '@/lib/supabase-client';
+import { itemsApi, recordsApi, uploadImages } from '@/lib/supabase-client';
 import toast from 'react-hot-toast';
 
 function RecordOutForm() {
@@ -15,13 +15,17 @@ function RecordOutForm() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [recentRecords, setRecentRecords] = useState<any[]>([]);
+  const [showRecentRecords, setShowRecentRecords] = useState(true);
 
-  // 載入物品列表
+  // 載入物品列表和最近記錄
   useEffect(() => {
     loadItems();
+    loadRecentRecords();
   }, []);
 
   // 如果 URL 中有 itemId，自動選擇該物品
@@ -45,6 +49,60 @@ function RecordOutForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadRecentRecords = async () => {
+    try {
+      const records = await recordsApi.getRecentOut(3);
+      setRecentRecords(records);
+    } catch (err: any) {
+      console.error('載入最近記錄失敗:', err);
+    }
+  };
+
+  // 計算相對時間
+  const getRelativeTime = (dateString: string) => {
+    if (!dateString) return '未知';
+
+    const now = new Date().getTime();
+    const date = new Date(dateString).getTime();
+    const diff = now - date;
+
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (minutes < 60) return `${minutes} 分鐘前`;
+    if (hours < 24) return `${hours} 小時前`;
+    return `${days} 天前`;
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    if (images.length + files.length > 5) {
+      toast.error('最多只能上傳 5 張照片');
+      return;
+    }
+
+    Array.from(files).forEach((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} 檔案過大，請選擇小於 5MB 的圖片`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setImages((prev) => [...prev, result]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const filteredItems = allItems.filter(item =>
@@ -88,13 +146,22 @@ function RecordOutForm() {
     try {
       setSubmitting(true);
 
+      // 處理圖片上傳
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        toast.loading('正在上傳圖片...', { id: 'uploading' });
+        imageUrls = await uploadImages('record-images', images);
+        toast.dismiss('uploading');
+      }
+
       // 建立出庫記錄（API 會自動更新庫存並檢查庫存是否足夠）
       await recordsApi.create({
         item_id: selectedItem.id,
         type: 'out',
         quantity: outQuantity,
         reason: note || '出庫',
-      });
+        image_urls: imageUrls,
+      } as any);
 
       toast.success(`成功記錄出庫：${selectedItem.name} -${quantity} ${selectedItem.unit}`);
 
@@ -103,9 +170,11 @@ function RecordOutForm() {
       setSelectedItem(null);
       setQuantity('');
       setNote('');
+      setImages([]);
 
-      // 重新載入物品列表（更新庫存）
+      // 重新載入物品列表和最近記錄
       await loadItems();
+      await loadRecentRecords();
     } catch (err: any) {
       console.error('出庫失敗:', err);
       toast.error(err.message || '出庫失敗');
@@ -194,6 +263,61 @@ function RecordOutForm() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* 最近出庫記錄 */}
+        {!searchQuery && !selectedItem && recentRecords.length > 0 && (
+          <div className="border border-[#333333] rounded bg-[#0a0a0a]">
+            <button
+              onClick={() => setShowRecentRecords(!showRecentRecords)}
+              className="w-full p-4 flex items-center justify-between hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400 font-mono">最近出庫</span>
+                <span className="text-xs text-gray-600 font-mono">({recentRecords.length})</span>
+              </div>
+              <span className="text-gray-500 font-mono text-sm">
+                {showRecentRecords ? '▲' : '▼'}
+              </span>
+            </button>
+
+            {showRecentRecords && (
+              <div className="px-4 pb-4 space-y-2">
+                {recentRecords.map((record: any) => (
+                  <Link
+                    key={record.id}
+                    href={`/inventory/${record.item_id}`}
+                    className="block p-3 border border-[#333333] rounded hover:border-[#555555] transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="text-white font-medium flex-1">{record.items?.name}</p>
+                      <span className="text-xs text-gray-500 font-mono ml-2">
+                        {getRelativeTime(record.created_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <span className="text-[#FF0055] font-mono text-sm font-bold">
+                        -{record.quantity} {record.items?.unit}
+                      </span>
+                      <span className="text-gray-500 text-xs font-mono">
+                        → {record.stock_after} {record.items?.unit}
+                      </span>
+                    </div>
+                    {record.reason && (
+                      <p className="text-xs text-gray-500 font-mono line-clamp-1">
+                        // {record.reason}
+                      </p>
+                    )}
+                    {record.operator?.name && (
+                      <p className="text-xs text-gray-600 font-mono mt-1">
+                        {record.operator.name}
+                      </p>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -296,6 +420,48 @@ function RecordOutForm() {
                   caretColor: '#00FF41'
                 }}
               />
+            </div>
+
+            {/* 上傳照片 */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-2 font-mono">
+                上傳照片（選填，最多 5 張）：
+              </label>
+
+              {images.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {images.map((image, index) => (
+                    <div key={index} className="relative aspect-square">
+                      <img
+                        src={image}
+                        alt={`預覽 ${index + 1}`}
+                        className="w-full h-full object-cover rounded border border-[#333333]"
+                      />
+                      <button
+                        onClick={() => removeImage(index)}
+                        className="absolute top-1 right-1 w-6 h-6 bg-[#FF0055] rounded-full flex items-center justify-center text-white text-xs hover:bg-[#FF0077] transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {images.length < 5 && (
+                <label className="block w-full p-4 border-2 border-dashed border-[#333333] rounded hover:border-[#00FF41] transition-colors cursor-pointer">
+                  <div className="text-center">
+                    <span className="text-gray-500 font-mono text-sm">📷 點擊上傳照片</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </label>
+              )}
             </div>
 
             {/* 送出按鈕 */}

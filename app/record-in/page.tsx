@@ -17,12 +17,15 @@ function RecordInForm() {
   const [note, setNote] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [allItems, setAllItems] = useState<any[]>([]);
+  const [recentRecords, setRecentRecords] = useState<any[]>([]);
+  const [showRecentRecords, setShowRecentRecords] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // 載入物品列表
+  // 載入物品列表和最近記錄
   useEffect(() => {
     loadItems();
+    loadRecentRecords();
   }, []);
 
   // 如果 URL 中有 itemId，自動選擇該物品
@@ -46,6 +49,29 @@ function RecordInForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadRecentRecords = async () => {
+    try {
+      const records = await recordsApi.getRecentIn(3);
+      setRecentRecords(records);
+    } catch (err: any) {
+      console.error('載入最近記錄失敗:', err);
+    }
+  };
+
+  // 計算相對時間
+  const getRelativeTime = (dateString: string) => {
+    if (!dateString) return '未知';
+    const now = new Date().getTime();
+    const date = new Date(dateString).getTime();
+    const diff = now - date;
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (minutes < 60) return `${minutes} 分鐘前`;
+    if (hours < 24) return `${hours} 小時前`;
+    return `${days} 天前`;
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,8 +147,9 @@ function RecordInForm() {
       setNote('');
       setImages([]);
 
-      // 重新載入物品列表
+      // 重新載入物品列表和最近記錄
       await loadItems();
+      await loadRecentRecords();
     } catch (err: any) {
       console.error('入庫失敗:', err);
       toast.error(err.message || '入庫失敗');
@@ -210,6 +237,61 @@ function RecordInForm() {
                 </Link>
               )}
             </div>
+          </div>
+        )}
+
+        {/* 最近入庫記錄 */}
+        {!searchQuery && !selectedItem && recentRecords.length > 0 && (
+          <div className="border border-[#333333] rounded bg-[#0a0a0a]">
+            <button
+              onClick={() => setShowRecentRecords(!showRecentRecords)}
+              className="w-full p-4 flex items-center justify-between hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400 font-mono">最近入庫</span>
+                <span className="text-xs text-gray-600 font-mono">({recentRecords.length})</span>
+              </div>
+              <span className="text-gray-500 font-mono text-sm">
+                {showRecentRecords ? '▲' : '▼'}
+              </span>
+            </button>
+
+            {showRecentRecords && (
+              <div className="px-4 pb-4 space-y-2">
+                {recentRecords.map((record: any) => (
+                  <Link
+                    key={record.id}
+                    href={`/inventory/${record.item_id}`}
+                    className="block p-3 border border-[#333333] rounded hover:border-[#555555] transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="text-white font-medium flex-1">{record.items?.name}</p>
+                      <span className="text-xs text-gray-500 font-mono ml-2">
+                        {getRelativeTime(record.created_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <span className="text-[#00FF41] font-mono text-sm font-bold">
+                        +{record.quantity} {record.items?.unit}
+                      </span>
+                      <span className="text-gray-500 text-xs font-mono">
+                        → {record.stock_after} {record.items?.unit}
+                      </span>
+                    </div>
+                    {record.reason && (
+                      <p className="text-xs text-gray-500 font-mono line-clamp-1">
+                        // {record.reason}
+                      </p>
+                    )}
+                    {record.operator?.name && (
+                      <p className="text-xs text-gray-600 font-mono mt-1">
+                        {record.operator.name}
+                      </p>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

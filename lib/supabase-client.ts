@@ -215,5 +215,39 @@ export const recordsApi = {
       .eq('id', record.item_id);
 
     return newRecord as Record;
+  },
+
+  // 取得最近的入庫記錄
+  async getRecentIn(limit = 3) {
+    const { data, error } = await supabase
+      .from('records')
+      .select(`
+        *,
+        items (id, name, unit),
+        operator:profiles!created_by (name)
+      `)
+      .eq('type', 'in')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data;
+  },
+
+  // 取得最近的出庫記錄
+  async getRecentOut(limit = 3) {
+    const { data, error } = await supabase
+      .from('records')
+      .select(`
+        *,
+        items (id, name, unit),
+        operator:profiles!created_by (name)
+      `)
+      .eq('type', 'out')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data;
   }
 };
