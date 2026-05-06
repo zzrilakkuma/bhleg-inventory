@@ -64,19 +64,19 @@ export default function Home() {
 
         <div className="flex items-center justify-between px-4 py-2 rounded border border-[#333333] bg-[#0a0a0a]">
           <span className="text-sm text-gray-400 truncate">您好，{user.user_metadata.name || user.email}</span>
-          <button onClick={handleLogout} className="text-xs text-[#00FF41] hover:underline font-mono flex-shrink-0 ml-4">
+          <button onClick={handleLogout} className="text-xs text-[#00FF41] hover:underline active:text-[#00dd35] font-mono flex-shrink-0 ml-4">
             [切換]
           </button>
         </div>
 
         <div className="space-y-4">
-          <Link href="/record-in" className="block w-full py-6 px-6 rounded border border-[#00FF41] bg-gradient-to-br from-[rgba(0,255,65,0.1)] to-transparent hover:from-[rgba(0,255,65,0.2)] transition-all duration-200 group" style={{ boxShadow: '0 0 5px rgba(0, 255, 65, 0.3)' }}>
+          <Link href="/record-in" className="block w-full py-6 px-6 rounded border border-[#00FF41] bg-gradient-to-br from-[rgba(0,255,65,0.1)] to-transparent hover:from-[rgba(0,255,65,0.2)] active:from-[rgba(0,255,65,0.3)] active:scale-[0.98] transition-all duration-200 group" style={{ boxShadow: '0 0 5px rgba(0, 255, 65, 0.3)' }}>
             <div className="text-left">
               <div className="text-xs text-gray-500 font-mono mb-1">// 記錄入庫</div>
               <div className="text-lg font-semibold text-[#00FF41]">&gt; RECORD_IN</div>
             </div>
           </Link>
-          <Link href="/record-out" className="block w-full py-6 px-6 rounded border border-[#00FF41] bg-gradient-to-br from-[rgba(0,255,65,0.1)] to-transparent hover:from-[rgba(0,255,65,0.2)] transition-all duration-200 group" style={{ boxShadow: '0 0 5px rgba(0, 255, 65, 0.3)' }}>
+          <Link href="/record-out" className="block w-full py-6 px-6 rounded border border-[#00FF41] bg-gradient-to-br from-[rgba(0,255,65,0.1)] to-transparent hover:from-[rgba(0,255,65,0.2)] active:from-[rgba(0,255,65,0.3)] active:scale-[0.98] transition-all duration-200 group" style={{ boxShadow: '0 0 5px rgba(0, 255, 65, 0.3)' }}>
             <div className="text-left">
               <div className="text-xs text-gray-500 font-mono mb-1">// 記錄出庫</div>
               <div className="text-lg font-semibold text-[#00FF41]">&gt; RECORD_OUT</div>
@@ -85,10 +85,10 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Link href="/inventory" className="py-4 px-4 rounded border border-[#333333] bg-[#0a0a0a] hover:border-[#00FF41] transition-colors duration-200 text-center">
+          <Link href="/inventory" className="py-4 px-4 rounded border border-[#333333] bg-[#0a0a0a] hover:border-[#00FF41] active:border-[#00FF41] active:bg-[rgba(0,255,65,0.05)] active:scale-[0.98] transition-all duration-200 text-center">
             <div className="text-sm text-white font-medium">查看庫存</div>
           </Link>
-          <Link href="/records" className="py-4 px-4 rounded border border-[#333333] bg-[#0a0a0a] hover:border-[#00FF41] transition-colors duration-200 text-center">
+          <Link href="/records" className="py-4 px-4 rounded border border-[#333333] bg-[#0a0a0a] hover:border-[#00FF41] active:border-[#00FF41] active:bg-[rgba(0,255,65,0.05)] active:scale-[0.98] transition-all duration-200 text-center">
             <div className="text-sm text-white font-medium">最近記錄</div>
           </Link>
         </div>
@@ -98,7 +98,7 @@ export default function Home() {
           <div className="mt-4">
             <Link
               href="/admin"
-              className="block w-full py-3 px-4 text-center text-sm text-gray-500 hover:text-gray-400 transition-colors font-mono"
+              className="block w-full py-3 px-4 text-center text-sm text-gray-500 hover:text-gray-400 active:text-gray-300 active:scale-[0.98] transition-all font-mono"
             >
               管理員後台
             </Link>
