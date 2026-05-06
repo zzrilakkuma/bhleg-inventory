@@ -13,7 +13,7 @@ const supabase = createBrowserClient(
 );
 
 // --- Reusable Safe Word Input Component with Peek ---
-const SafeWordInput = ({ value, onChange, required, autoComplete = "new-password" }: { value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, required: boolean, autoComplete?: string }) => {
+const SafeWordInput = ({ value, onChange, required, autoComplete = "new-password", onKeyDown }: { value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, required: boolean, autoComplete?: string, onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void }) => {
   const [isPeeking, setIsPeeking] = useState(false);
 
   return (
@@ -23,6 +23,7 @@ const SafeWordInput = ({ value, onChange, required, autoComplete = "new-password
         placeholder="> Safe Word:"
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
         className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono pr-12"
         autoComplete={autoComplete}
         required={required}
@@ -81,7 +82,7 @@ export default function LoginPage() {
           toast.error('請輸入有效的 Email');
           return;
         }
-        
+
         // --- EMAIL DUPLICATION CHECK ---
         setIsLoading(true);
         const { data, error } = await supabase.functions.invoke('login-with-name', {
@@ -105,13 +106,27 @@ export default function LoginPage() {
         }
       }
     }
-    
+
     if (step === 1 && isRegistering && name.trim().length < 3) {
       toast.error('身份名稱長度至少需要 3 個字元');
       return;
     }
 
     handleStepChange(step + 1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      // 在最後一步才送出表單
+      if ((step === 1 && !isRegistering) || (step === 2 && isRegistering)) {
+        handleSubmit(e as any);
+      } else {
+        // 其他步驟按 Enter 等於按「下一步」
+        handleNext();
+      }
+    }
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -200,9 +215,9 @@ export default function LoginPage() {
                 {step === 0 && (
                   <motion.div key={0} custom={direction} variants={slideVariants} initial="hidden" animate="visible" exit="exit" className="absolute w-full space-y-6">
                       {isRegistering ? (
-                          <input type="email" placeholder="> 你的 Email:" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono" autoComplete="off" required />
+                          <input type="email" placeholder="> 你的 Email:" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono" autoComplete="off" required />
                       ) : (
-                          <input type="text" placeholder="你的名稱：" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono" autoComplete="off" required />
+                          <input type="text" placeholder="你的名稱：" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKeyDown} className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono" autoComplete="off" required />
                       )}
                       
                       <div className="flex flex-col space-y-4">
@@ -216,9 +231,9 @@ export default function LoginPage() {
                 {step === 1 && (
                      <motion.div key={1} custom={direction} variants={slideVariants} initial="hidden" animate="visible" exit="exit" className="absolute w-full space-y-6">
                         {isRegistering ? (
-                            <input type="text" placeholder="你的名稱：" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono" autoComplete="off" required />
+                            <input type="text" placeholder="你的名稱：" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKeyDown} className="w-full p-4 bg-[#0a0a0a] border border-[#333] rounded focus:border-[#00FF41] focus:ring-0 outline-none font-mono" autoComplete="off" required />
                         ) : (
-                            <SafeWordInput value={safeWord} onChange={(e) => setSafeWord(e.target.value)} required />
+                            <SafeWordInput value={safeWord} onChange={(e) => setSafeWord(e.target.value)} onKeyDown={handleKeyDown} required />
                         )}
 
                         <div className="flex flex-col space-y-4">
@@ -243,7 +258,7 @@ export default function LoginPage() {
 
                 {step === 2 && isRegistering && (
                      <motion.div key={2} custom={direction} variants={slideVariants} initial="hidden" animate="visible" exit="exit" className="absolute w-full space-y-6">
-                        <SafeWordInput value={safeWord} onChange={(e) => setSafeWord(e.target.value)} required />
+                        <SafeWordInput value={safeWord} onChange={(e) => setSafeWord(e.target.value)} onKeyDown={handleKeyDown} required />
                         
                         <div className="flex flex-col space-y-4">
                              <button type="submit" disabled={isLoading} className="w-full py-2.5 px-4 rounded border border-[#00FF41] bg-gradient-to-br from-[rgba(0,255,65,0.1)] to-transparent hover:from-[rgba(0,255,65,0.2)] transition-all duration-200 group font-semibold text-[#00FF41]" style={{ boxShadow: '0 0 5px rgba(0, 255, 65, 0.3)' }}>
