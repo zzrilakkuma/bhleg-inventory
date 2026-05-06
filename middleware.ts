@@ -83,6 +83,6 @@ export const config = {
      * - supabase/functions/ (edge functions)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|supabase/functions).*)',
+    '/((?!_next/static|_next/image|favicon.ico|supabase/functions|api/ping).*)',
   ],
 };
