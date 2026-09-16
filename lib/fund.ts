@@ -31,6 +31,22 @@ export const TYPE_LABEL: Record<FundTransactionType, string> = {
   group_summary: '小組彙整', reset: '歸零清算',
 };
 
+/** 畫面上的大類別 */
+export type FundCategory = '收入' | '支出' | '結算' | '轉帳';
+export const CATEGORY_OF: Record<FundTransactionType, FundCategory> = {
+  donation: '收入', income: '收入', loan: '收入', refund: '收入',
+  expense: '支出', repayment: '支出',
+  transfer: '轉帳',
+  settlement: '結算', opening: '結算', group_summary: '結算', reset: '結算',
+};
+export const CATEGORIES: FundCategory[] = ['收入', '支出', '結算', '轉帳'];
+/** 細類型名稱（畫面小字用） */
+export const SUBTYPE_LABEL: Record<FundTransactionType, string> = {
+  donation: '奉納', income: '其他收入', loan: '借款', refund: '回注',
+  expense: '支出', repayment: '還款', transfer: '轉帳',
+  settlement: '月結算', opening: '初始金額', group_summary: '小組彙整', reset: '歸零清算',
+};
+
 export interface FundLine {
   id: number;
   transaction_id: number;
@@ -173,6 +189,12 @@ export const fmtAmount = (n: number) => (n < 0 ? `-${Math.abs(n).toLocaleString(
 export interface FundAdvancer { id: number; name: string; active: boolean; sort_order: number }
 export interface FundTag { id: number; name: string; group: 'space' | 'nature' | 'item'; active: boolean; sort_order: number }
 export const TAG_GROUP_LABEL: Record<FundTag['group'], string> = { space: '空間', nature: '性質', item: '細項' };
+
+export interface FundTemplate {
+  id: number; name: string; kind: 'expense' | 'tags'; vendor: string | null; description: string | null;
+  tags: string[]; storage_name: string | null; advancer_name: string | null; default_amount: number | null;
+  active: boolean; sort_order: number;
+}
 
 export interface FundExpense {
   id: number; transaction_id: number; vendor: string | null; description: string | null;

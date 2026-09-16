@@ -7,7 +7,7 @@ import { insertTransaction, type NewLine } from '@/lib/fund-db';
 import {
   todayISO, fmtAmount, computeRunningBalances, loanRemaining, TAG_GROUP_LABEL,
   buildExpenseTexts, buildAdvanceSettleTexts, buildLoanTexts, buildRepaymentTexts, buildTransferTexts, buildOtherIncomeTexts,
-  type FundAccount, type FundStorage, type FundAdvancer, type FundTag, type FundLoan, type FundRepayment, type FundTransaction,
+  type FundAccount, type FundStorage, type FundAdvancer, type FundTag, type FundLoan, type FundRepayment, type FundTransaction, type FundTemplate, type FundExpense,
 } from '@/lib/fund';
 import { Field, FundNav, PageHeader, Loading, ErrorBox, inputCls, chipCls, primaryBtnCls } from '../ui';
 
@@ -24,6 +24,8 @@ export default function NewTransactionPage() {
   const [loans, setLoans] = useState<FundLoan[]>([]);
   const [repayments, setRepayments] = useState<FundRepayment[]>([]);
   const [transactions, setTransactions] = useState<FundTransaction[]>([]);
+  const [templates, setTemplates] = useState<FundTemplate[]>([]);
+  const [lastSame, setLastSame] = useState<FundExpense | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +54,7 @@ export default function NewTransactionPage() {
 
   useEffect(() => {
     (async () => {
-      const [ac, st, ad, tg, ln, rp, tx] = await Promise.all([
+      const [ac, st, ad, tg, ln, rp, tx, tp] = await Promise.all([
         supabase.from('fund_accounts').select('*').order('sort_order'),
         supabase.from('fund_storages').select('*').order('sort_order'),
         supabase.from('fund_advancers').select('*').eq('active', true).order('sort_order'),
@@ -60,8 +62,10 @@ export default function NewTransactionPage() {
         supabase.from('fund_loans').select('*').order('id'),
         supabase.from('fund_repayments').select('*'),
         supabase.from('fund_transactions').select('*, fund_lines(*)'),
+        supabase.from('fund_templates').select('*').eq('active', true).order('sort_order'),
       ]);
       const err = ac.error ?? st.error ?? ad.error ?? tg.error ?? ln.error ?? rp.error ?? tx.error;
+      if (!tp.error) setTemplates(tp.data as FundTemplate[]);
       if (err) { setError(err.message); setLoading(false); return; }
       setAccounts(ac.data as FundAccount[]); setStorages(st.data as FundStorage[]); setAdvancers(ad.data as FundAdvancer[]);
       setTags(tg.data as FundTag[]); setLoans(ln.data as FundLoan[]); setRepayments(rp.data as FundRepayment[]);
@@ -95,6 +99,32 @@ export default function NewTransactionPage() {
   const openLoans = loans.map((l) => ({ ...l, remaining: loanRemaining(l, repayments) })).filter((l) => l.remaining > 0);
 
   const name = (list: { id: number; name: string }[], id: number | '') => list.find((x) => x.id === id)?.name ?? '';
+
+  // 套用模板
+  const applyTemplate = (tpl: FundTemplate) => {
+    if (tpl.kind === 'tags') { setSelTags((p) => Array.from(new Set([...p, ...tpl.tags]))); return; }
+    const monthNow = `${new Date().getMonth() + 1}月`;
+    setVendor(tpl.vendor ?? '');
+    setDescription((tpl.description ?? '').replace(/N月/g, monthNow));
+    setSelTags(tpl.tags);
+    if (tpl.default_amount) setAmount(String(tpl.default_amount));
+    const st = storages.find((x) => x.name === tpl.storage_name); if (st) setStorageId(st.id);
+    const adv = advancers.find((x) => x.name === tpl.advancer_name); setAdvancerId(adv?.id ?? '');
+    toast.success(`已套用「${tpl.name}」`);
+  };
+  // 同店家上一筆
+  const lookupSame = async (v: string) => {
+    const q = v.trim();
+    if (q.length < 2) { setLastSame(null); return; }
+    const { data } = await supabase.from('fund_expenses').select('*').ilike('vendor', `%${q}%`).order('id', { ascending: false }).limit(1);
+    setLastSame((data?.[0] as FundExpense) ?? null);
+  };
+  const applySame = () => {
+    if (!lastSame) return;
+    setVendor(lastSame.vendor ?? ''); setDescription(lastSame.description ?? ''); setSelTags(lastSame.tags);
+    const adv = advancers.find((x) => x.id === lastSame.advancer_id); setAdvancerId(adv?.id ?? '');
+    setLastSame(null);
+  };
 
   const reset = () => { setAmount(''); setComment(''); setVendor(''); setDescription(''); setVoucherNo(''); setSelTags([]); setAdvancerId(''); setLender(''); setFee(''); setSource(''); };
 
@@ -205,7 +235,21 @@ export default function NewTransactionPage() {
 
         {kind === 'expense' && (
           <>
-            <Field label="店家或對象："><input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="全聯福利中心" className={inputCls} /></Field>
+            {templates.some((t) => t.kind === 'expense') && (
+              <Field label="常用模板：">
+                <div className="flex flex-wrap gap-2">
+                  {templates.filter((t) => t.kind === 'expense').map((t) => <button type="button" key={t.id} onClick={() => applyTemplate(t)} className={chipCls(false)}>{t.name}</button>)}
+                </div>
+              </Field>
+            )}
+            <Field label="店家或對象：">
+              <input value={vendor} onChange={(e) => { setVendor(e.target.value); lookupSame(e.target.value); }} placeholder="全聯福利中心" className={inputCls} />
+              {lastSame && (
+                <button type="button" onClick={applySame} className="mt-2 w-full text-left text-xs font-mono px-3 py-2 rounded border border-[#333333] text-gray-400 hover:border-[#00FF41] hover:text-[#00FF41]">
+                  帶入上一筆「{lastSame.vendor}」：{lastSame.description ?? '—'}{lastSame.tags.length ? `　#${lastSame.tags.join(' #')}` : ''}
+                </button>
+              )}
+            </Field>
             <Field label="說明（可寫品項）："><textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="咖啡豆、衛生紙" className={`${inputCls} text-sm resize-none`} /></Field>
             <Field label="金額：">{amountInput}</Field>
             <Field label="憑證（非必填）：" hint="電子發票號碼如 WV-51039832，或匯款末五碼"><input value={voucherNo} onChange={(e) => setVoucherNo(e.target.value)} className={inputCls} /></Field>
@@ -216,6 +260,11 @@ export default function NewTransactionPage() {
             </div></Field>
             {advancerId === '' && <Field label="從哪裡付：">{storageSelect(storageId, setStorageId)}</Field>}
             <Field label="標籤："><div className="space-y-2">
+              {templates.some((t) => t.kind === 'tags') && (
+                <div className="flex flex-wrap gap-2 pb-1 border-b border-[#222222]">
+                  {templates.filter((t) => t.kind === 'tags').map((t) => <button type="button" key={t.id} onClick={() => applyTemplate(t)} className={`${chipCls(false)} border-dashed`}>＋{t.name}</button>)}
+                </div>
+              )}
               {(['space', 'nature', 'item'] as const).map((g) => (
                 <div key={g}>
                   <div className="text-xs text-gray-600 font-mono mb-1">{TAG_GROUP_LABEL[g]}</div>

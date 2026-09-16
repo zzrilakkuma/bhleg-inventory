@@ -63,3 +63,20 @@ export const updateTransaction = async (
     if (lErr) throw new Error(lErr.message);
   }
 };
+
+/** 把某筆交易的小結改成指定金額：差額以「矯正回歸」明細記入主科目與指定存放位置，後續餘額自動重算 */
+export const adjustTotal = async (opts: { transactionId: number; diff: number; accountId: number; storageId: number }) => {
+  if (!opts.diff) return;
+  const { data: existing } = await supabase.from('fund_lines').select('id, amount')
+    .eq('transaction_id', opts.transactionId).eq('storage_id', opts.storageId).eq('account_id', opts.accountId).eq('label', '矯正回歸').maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('fund_lines').update({ amount: Number(existing.amount) + opts.diff }).eq('id', existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from('fund_lines').insert({ transaction_id: opts.transactionId, account_id: opts.accountId, storage_id: opts.storageId, amount: opts.diff, label: '矯正回歸' });
+    if (error) throw new Error(error.message);
+  }
+  const { data: tx } = await supabase.from('fund_transactions').select('note').eq('id', opts.transactionId).single();
+  const storageNote = `#小結矯正回歸 ${opts.diff > 0 ? '+' : ''}${opts.diff}元`;
+  await supabase.from('fund_transactions').update({ note: `${tx?.note ?? ''}\n${storageNote}`.trim(), updated_at: new Date().toISOString() }).eq('id', opts.transactionId);
+};

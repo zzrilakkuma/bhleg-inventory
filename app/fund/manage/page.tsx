@@ -7,7 +7,7 @@ import { FundNav, PageHeader, Loading, ErrorBox, inputCls, chipCls } from '../ui
 
 type Row = { id: number; active: boolean; sort_order: number } & Record<string, unknown>;
 
-interface Column { key: string; label: string; type?: 'text' | 'select'; options?: string[]; required?: boolean }
+interface Column { key: string; label: string; type?: 'text' | 'select' | 'tags' | 'number'; options?: string[]; required?: boolean }
 interface TableDef { table: string; label: string; columns: Column[] }
 
 const TABLES: TableDef[] = [
@@ -23,6 +23,12 @@ const TABLES: TableDef[] = [
   { table: 'fund_advancers', label: '代墊者', columns: [{ key: 'name', label: '名稱', required: true }] },
   { table: 'fund_tags', label: '標籤', columns: [
     { key: 'name', label: '名稱', required: true }, { key: 'group', label: '分組', type: 'select', options: ['space', 'nature', 'item'] },
+  ] },
+  { table: 'fund_templates', label: '常用模板', columns: [
+    { key: 'name', label: '模板名稱', required: true }, { key: 'kind', label: '種類', type: 'select', options: ['expense', 'tags'] },
+    { key: 'vendor', label: '店家或對象' }, { key: 'description', label: '說明（N 會提示填月份）' },
+    { key: 'tags', label: '標籤（逗號分隔）', type: 'tags' }, { key: 'storage_name', label: '從哪裡付', type: 'select', options: ['', '現金', '郵局'] },
+    { key: 'advancer_name', label: '代墊者', type: 'select', options: ['', '信用卡', '中央蘭室'] }, { key: 'default_amount', label: '預設金額', type: 'number' },
   ] },
 ];
 
@@ -57,7 +63,9 @@ export default function ManagePage() {
     for (const c of def.columns) {
       const v = (draft[c.key] ?? '').trim();
       if (c.required && !v) return toast.error(`請填${c.label}`);
-      row[c.key] = v || (c.type === 'select' ? c.options?.[0] : null);
+      if (c.type === 'tags') row[c.key] = v ? v.split(/[,，、\s]+/).filter(Boolean) : [];
+      else if (c.type === 'number') row[c.key] = v ? Number(v) : null;
+      else row[c.key] = v || (c.type === 'select' ? c.options?.[0] || null : null);
     }
     row.sort_order = (rows.reduce((m, r) => Math.max(m, r.sort_order), 0) || 0) + 1;
     const { error } = await supabase.from(def.table).insert(row);
@@ -88,7 +96,7 @@ export default function ManagePage() {
                 {c.options?.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             ) : (
-              <input key={c.key} value={draft[c.key] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [c.key]: e.target.value }))} placeholder={c.label} className={inputCls} />
+              <input key={c.key} type={c.type === 'number' ? 'number' : 'text'} value={draft[c.key] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [c.key]: e.target.value }))} placeholder={c.label} className={inputCls} />
             )
           ))}
           <button type="submit" className="w-full py-3 rounded border border-[#00FF41] text-[#00FF41] font-mono text-sm">+ 新增</button>
@@ -104,7 +112,7 @@ export default function ManagePage() {
               <div className="min-w-0">
                 <div className="text-white text-sm truncate">{labelOf(r)}</div>
                 <div className="text-xs text-gray-500 font-mono truncate">
-                  {def.columns.slice(1).map((c) => r[c.key]).filter(Boolean).join(' · ')}
+                  {def.columns.slice(1).map((c) => (Array.isArray(r[c.key]) ? (r[c.key] as string[]).join('/') : r[c.key])).filter(Boolean).join(' · ')}
                 </div>
               </div>
               <button onClick={() => toggle(r)} className={`text-xs font-mono px-3 py-1 rounded border shrink-0 ml-3 ${r.active ? 'border-[#333333] text-gray-400 hover:border-[#FF0055] hover:text-[#FF0055]' : 'border-[#00FF41] text-[#00FF41]'}`}>
