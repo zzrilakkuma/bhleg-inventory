@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
+import { deleteTransaction, updateTransaction } from '@/lib/fund-db';
+import { FundNav, inputCls } from './ui';
 import {
   TYPE_LABEL, computeRunningBalances, formatSnapshot, fmtAmount,
   type FundAccount, type FundStorage, type FundTransaction,
@@ -16,6 +19,8 @@ export default function FundPage() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState({ occurred_on: '', title: '', voucher: '', note: '', comment: '', amount: '' });
 
   const load = async () => {
     const [tx, ac, st] = await Promise.all([
@@ -35,6 +40,28 @@ export default function FundPage() {
   const shown = transactions.filter((t) => typeFilter === 'all' || TYPE_LABEL[t.type] === typeFilter);
   const typeOptions = Array.from(new Set(transactions.map((t) => TYPE_LABEL[t.type])));
 
+  const startEdit = (t: FundTransaction) => {
+    setEditing(t.id);
+    setDraft({ occurred_on: t.occurred_on, title: t.title, voucher: t.voucher ?? '', note: t.note ?? '', comment: t.comment ?? '', amount: String(t.amount) });
+  };
+  const saveEdit = async (t: FundTransaction) => {
+    const lines = t.fund_lines ?? [];
+    const newAmount = Math.round(Number(draft.amount));
+    const amountChanged = newAmount !== Number(t.amount);
+    if (amountChanged && lines.length !== 1) return toast.error('這筆有多條明細，金額請刪除後重登');
+    try {
+      await updateTransaction(t.id,
+        { occurred_on: draft.occurred_on, title: draft.title, voucher: draft.voucher || null, note: draft.note || null, comment: draft.comment || null, amount: newAmount },
+        amountChanged ? { lineId: lines[0].id, amount: newAmount } : undefined);
+      toast.success('已更新'); setEditing(null); await load();
+    } catch (err) { toast.error(err instanceof Error ? err.message : '更新失敗'); }
+  };
+  const remove = async (t: FundTransaction) => {
+    if (!confirm(`刪除這筆？\n${t.occurred_on} ${t.title.split('\n')[0]} ${t.amount}`)) return;
+    try { await deleteTransaction(t.id); toast.success('已刪除'); setOpen(null); await load(); }
+    catch (err) { toast.error(err instanceof Error ? err.message : '刪除失敗'); }
+  };
+
   if (loading) return <div className="flex min-h-screen items-center justify-center"><div className="text-[#00FF41] font-mono">載入中...</div></div>;
   if (error) return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
@@ -49,10 +76,7 @@ export default function FundPage() {
         <Link href="/" className="inline-block text-sm text-gray-500 hover:text-[#00FF41] font-mono mb-4">← 返回首頁</Link>
         <h1 className="text-2xl font-bold text-[#00FF41]" style={{ textShadow: '0 0 10px rgba(0,255,65,0.3)' }}>公基金 流水帳</h1>
         <p className="text-sm text-gray-500 font-mono mt-1">{'// FUND_LEDGER'}</p>
-        <nav className="flex flex-wrap gap-3 mt-4 text-sm font-mono">
-          <Link href="/fund/monthly" className="px-3 py-2 border border-[#333333] rounded text-gray-300 hover:border-[#00FF41]">每月繳納一覽</Link>
-          <Link href="/fund/donate" className="px-3 py-2 border border-[#333333] rounded text-gray-300 hover:border-[#00FF41]">奉納表單（公開）</Link>
-        </nav>
+        <FundNav current="/fund" />
       </header>
 
       <main className="w-full max-w-5xl mx-auto space-y-6">
@@ -109,6 +133,29 @@ export default function FundPage() {
                       </div>
                       <div><div className="text-gray-600 mb-1">結算</div><pre className="text-gray-300 whitespace-pre-wrap">{snap ? formatSnapshot(snap, accounts, storages) : '—'}</pre></div>
                       {t.comment && <div className="sm:col-span-2"><div className="text-gray-600 mb-1">留言</div><pre className="text-gray-300 whitespace-pre-wrap">{t.comment}</pre></div>}
+                      <div className="sm:col-span-2 flex gap-2 pt-2 border-t border-[#222222]">
+                        {editing === t.id ? (
+                          <>
+                            <button onClick={() => saveEdit(t)} className="px-3 py-1 rounded border border-[#00FF41] text-[#00FF41]">儲存</button>
+                            <button onClick={() => setEditing(null)} className="px-3 py-1 rounded border border-[#333333] text-gray-400">取消</button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => startEdit(t)} className="px-3 py-1 rounded border border-[#333333] text-gray-300 hover:border-[#00FF41]">編輯</button>
+                            <button onClick={() => remove(t)} className="px-3 py-1 rounded border border-[#333333] text-gray-300 hover:border-[#FF0055] hover:text-[#FF0055] ml-auto">刪除</button>
+                          </>
+                        )}
+                      </div>
+                      {editing === t.id && (
+                        <div className="sm:col-span-2 space-y-2">
+                          <input type="date" value={draft.occurred_on} onChange={(e) => setDraft((d) => ({ ...d, occurred_on: e.target.value }))} className={inputCls} />
+                          <textarea rows={2} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="品項說明" className={`${inputCls} resize-none`} />
+                          <textarea rows={2} value={draft.voucher} onChange={(e) => setDraft((d) => ({ ...d, voucher: e.target.value }))} placeholder="憑證" className={`${inputCls} resize-none`} />
+                          <textarea rows={3} value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} placeholder="備註" className={`${inputCls} resize-none`} />
+                          <input value={draft.comment} onChange={(e) => setDraft((d) => ({ ...d, comment: e.target.value }))} placeholder="留言" className={inputCls} />
+                          <input type="number" value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} placeholder="金額" className={inputCls} disabled={(t.fund_lines ?? []).length !== 1} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -2,7 +2,7 @@
 insert into fund_storages (name, sort_order, active) values
   ('郵局', 1, true), ('現金', 2, true), ('現金（廚房）', 3, true),
   ('現金（蘭樂）', 4, true), ('現金（MT）', 5, true), ('現金（沙龍）', 6, true),
-  ('信用卡（待清償）', 7, true)
+  ('代墊（待清償）', 7, true)
 on conflict (name) do nothing;
 
 insert into fund_accounts (name, kind, default_storage_id, sort_order, active) values
