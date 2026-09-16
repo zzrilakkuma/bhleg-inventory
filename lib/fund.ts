@@ -4,7 +4,7 @@ export interface FundMember {
   id: number;
   nickname: string;
   real_name: string | null;
-  role: '巢穴人' | '巢穴眾' | null;
+  role: '巢穴人' | '巢穴眾' | '外家代表' | null;
   default_last5: string | null;
   active: boolean;
   sort_order: number;
@@ -69,6 +69,7 @@ export interface FundDonation {
 }
 
 export const STANDARD_AMOUNT = 1500;
+export const MONTHLY_CAP = 5000; // 章程：單月挹注上限，超過只提醒不擋
 
 // ---- 月份 ----
 

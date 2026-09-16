@@ -28,11 +28,11 @@ on conflict (name) do nothing;
 -- 成員：從總表品項說明抽出；active = 2026 年後仍有奉納
 insert into fund_members (nickname, real_name, role, default_last5, active, sort_order) values
   ('嚴昕',   null,     '巢穴人', '10324', true,  1),
-  ('Steven', '趙哲儒', '巢穴眾', '88404', true,  2),
+  ('Steven', '趙哲儒', '巢穴人', '88404', true,  2),
   ('Barney', '黃嵩淵', '巢穴人', '60399', true,  3),
   ('Eason',  '王翊丞', '巢穴人', '93172', true,  4),
-  ('Ryan',   '陳志翰', '巢穴眾', null,    true,  5),
-  ('陳臻',   null,     '巢穴眾', '25961', true,  6),
+  ('Ryan',   '陳志翰', '巢穴人', null,    true,  5),
+  ('陳臻',   null,     '巢穴人', '25961', true,  6),
   ('Lucy',   '劉怡萱', '巢穴眾', '23221', true,  7),
   ('Sim',    '沈建緯', '巢穴眾', '11901', true,  8),
   ('陳震宇', null,     '巢穴人', '28869', true,  9),
@@ -47,7 +47,11 @@ insert into fund_members (nickname, real_name, role, default_last5, active, sort
   ('Asher',  '艾希爾', '巢穴人', '00129', true, 18),
   ('陳威宇', null,     '巢穴眾', '69936', true, 19),
   ('許永霖', null,     '巢穴眾', '16141', true, 20),
-  ('小八',   '吳佩姍', '巢穴眾', '28578', true, 21),
+  ('小八',   '吳佩姍', '外家代表', '28578', true, 21),
+  ('周平',   null,     '巢穴人', null,    true, 22),
+  ('柏萊赫夫夫', null, '巢穴人', null,    true, 23),
+  ('Colson&懸', null,  '外家代表', null,  true, 24),
+  ('阿祈',   '蕭靖祈', '外家代表', null,  true, 25),
   -- 一階成員，2025 年後未再奉納
   ('林承豪', null,     '巢穴人', '34521', false, 30),
   ('June',   '王慧君', '巢穴眾', '61600', false, 31),

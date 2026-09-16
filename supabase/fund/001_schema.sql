@@ -5,7 +5,7 @@ create table if not exists fund_members (
   id            serial primary key,
   nickname      text not null unique,          -- 暱稱（總表用的名字）
   real_name     text,                          -- 本名
-  role          text check (role in ('巢穴人','巢穴眾')),
+  role          text check (role in ('巢穴人','巢穴眾','外家代表')),
   default_last5 text,                          -- 匯款帳號末五碼預填
   active        boolean not null default true, -- 是否在籍
   sort_order    int not null default 0,

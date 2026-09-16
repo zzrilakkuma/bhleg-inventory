@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { STANDARD_AMOUNT, todayISO, type FundAccount, type FundHandler, type FundMember } from '@/lib/fund';
+import { STANDARD_AMOUNT, MONTHLY_CAP, todayISO, type FundAccount, type FundHandler, type FundMember } from '@/lib/fund';
 
 const inputCls = 'w-full px-4 py-3 bg-[#0a0a0a] border border-[#333333] rounded text-white placeholder-gray-600 focus:outline-none focus:border-[#00FF41] transition-colors font-mono';
 const labelCls = 'block text-sm text-gray-400 mb-2 font-mono';
@@ -164,6 +164,9 @@ export default function DonatePage() {
 
           <div>
             <label className={labelCls}>金額：</label>
+            {amountNum > MONTHLY_CAP && (
+              <p className="text-xs text-[#FFB000] font-mono mb-2">章程單月上限 {MONTHLY_CAP} 元，超過仍可送出，但請先在群組說明</p>
+            )}
             <div className="flex gap-3">
               <input type="number" inputMode="numeric" min={1} step={1} value={amount} onChange={(e) => setAmount(e.target.value)}
                 placeholder="0" className={`${inputCls} text-center text-2xl font-bold`} style={{ caretColor: '#00FF41' }} />
