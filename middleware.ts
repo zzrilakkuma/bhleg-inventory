@@ -81,8 +81,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - supabase/functions/ (edge functions)
+     * - fund/donate, api/fund/donate (公開奉納表單)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|supabase/functions|api/ping).*)',
+    '/((?!_next/static|_next/image|favicon.ico|supabase/functions|api/ping|fund/donate|api/fund/donate).*)',
   ],
 };

@@ -93,6 +93,10 @@ export default function Home() {
           </Link>
         </div>
 
+        <Link href="/fund" className="block py-4 px-4 rounded border border-[#333333] bg-[#0a0a0a] hover:border-[#00FF41] active:border-[#00FF41] active:bg-[rgba(0,255,65,0.05)] active:scale-[0.98] transition-all duration-200 text-center">
+          <div className="text-sm text-white font-medium">公基金 流水帳</div>
+        </Link>
+
         {/* 管理員專用連結 */}
         {isAdmin && (
           <div className="mt-4">
