@@ -492,6 +492,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
     if (base.lines.length === 0 && !base.offLedger && base.amount !== 0 && cls.type !== 'settlement') {
       rowWarns.push(`amount ${base.amount} but zero snapshot delta: no lines`)
     }
+    if (cls.type === 'transfer' && base.lines.length === 0) rowWarns.push('transfer with no resolvable lines')
     for (const t of extraTxs) push(t)
     push(base)
     if (target) {

@@ -316,3 +316,15 @@ test('non-advancer row with an amount but zero snapshot delta warns (row 325 Rub
   assert.equal(p.txs[1].offLedger, false)
   assert.ok(p.warns.includes('row 3: amount 1000 but zero snapshot delta: no lines'))
 })
+
+test('transfer row without a parseable transfer tag and no checkpoint warns (row 421)', () => {
+  const p = planImport([
+    opening({ 不凍結零用金: 46, 郵局: 46 }, '46'),
+    mk({ row: 3, kind: '轉帳', date: '2026/1/15', title: '【巢穴OG沙龍 專款】\n1月份', voucher: '#', amountCell: '～5000', note: '#巢穴 #OG #力行路40號 #沙龍\n#郵局轉入「巢穴OG沙龍專款」' }),
+    opening({ 不凍結零用金: 46, 郵局: 46 }, '0'),
+  ].map((r, i) => ({ ...r, row: i + 2 })), refs)
+  const t = p.txs.find((x) => x.type === 'transfer')!
+  assert.equal(t.amount, 0)
+  assert.deepEqual(t.lines, [])
+  assert.ok(p.warns.includes('row 3: transfer with no resolvable lines'))
+})
