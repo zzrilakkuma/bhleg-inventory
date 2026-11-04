@@ -8,8 +8,6 @@ export type Classification = {
   isMonthMarker: boolean
 }
 
-const MONTH_MARKER = /^[0-9一二三四五六七八九十]+月份/
-
 function out(type: FundTransactionType, incomeSource: IncomeSource | null = null, isMonthMarker = false): Classification {
   return { type, incomeSource, isMonthMarker }
 }
@@ -19,6 +17,8 @@ function classifyIncome(r: RawRow, tags: ReturnType<typeof parseTags>): Classifi
   const donorTag = note.includes('#巢穴共同體成員奉納')
   const nonMember = tags.member === null || NON_MEMBER_DONORS.includes(tags.member)
   // parseTags can mistake a loan tag line (#巢穴緊急紓困借款...) for the member; such rows are loans.
+  // Reinject (title 回注) wins over donation: e.g. 中央蘭室 奉納 ... 未用盡之餘款回注.
+  if (/回注/.test(title)) return out('refund', 'reinject')
   const loanTagAsMember = tags.member !== null && /借款|借貸|紓困/.test(tags.member)
   if (donorTag && !nonMember && !loanTagAsMember) return out('donation', 'donation')
   if (/#沙龍營業|#營業收入|沙龍營業/.test(title + '\n' + note)) return out('income', 'salon')
@@ -35,8 +35,8 @@ function classifyIncome(r: RawRow, tags: ReturnType<typeof parseTags>): Classifi
 export function classifyRow(r: RawRow, tags: ReturnType<typeof parseTags>): Classification {
   const kind = r.kind.trim()
   if (kind === '') {
-    if (MONTH_MARKER.test(r.amountCell.trim())) return out('income', null, true)
-    throw new Error(`row ${r.row}: empty kind but not a month marker`)
+    // Blank-kind rows are either month markers (月份) or fully empty rows; callers (Task 9) skip both.
+    return out('income', null, true)
   }
   if (kind.includes('二階實踐') || kind === '初始金額') return out('opening')
   switch (kind) {

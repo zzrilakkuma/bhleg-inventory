@@ -50,6 +50,20 @@ test('loan row tagged as member donation is still loan', () => {
   assert.equal(r.incomeSource, 'loan')
 })
 
+test('reinject beats donation (row 456)', () => {
+  const r = c({
+    kind: '收入',
+    title: '中央蘭室 奉納\n1月 奉納金 \n（1月蘭室專用款 未用盡之餘款回注）',
+    note: '#巢穴共同體成員奉納\n#中央蘭室 #艾摩爾 #Keiran \n#現金 #存放現金袋',
+  })
+  assert.equal(r.type, 'refund')
+  assert.equal(r.incomeSource, 'reinject')
+})
+
+test('fully empty row is skipped like a marker', () => {
+  assert.equal(c({}).isMonthMarker, true)
+})
+
 test('reinject -> refund', () => {
   const r = c({ kind: '收入', title: '特殊專款回注', note: '' })
   assert.equal(r.type, 'refund')
