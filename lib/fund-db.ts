@@ -1,6 +1,6 @@
 // 登入後的後台寫入：交易 + 明細 + 子表，失敗時回滾主交易（cascade 刪除子資料）
 import { supabase } from './supabase-client.ts';
-import type { FundTransactionType } from './fund.ts';
+import type { FundTransactionType, IncomeSource } from './fund.ts';
 
 export interface NewLine { account_id: number; storage_id: number; amount: number; label?: string | null }
 
@@ -13,6 +13,11 @@ export interface NewTransaction {
   comment?: string | null;
   amount: number;
   seq?: number;
+  off_ledger?: boolean;
+  income_source?: IncomeSource | null;
+  stated_on?: string | null;
+  group_id?: number | null;
+  decision_ref?: string | null;
 }
 
 export const insertTransaction = async (
