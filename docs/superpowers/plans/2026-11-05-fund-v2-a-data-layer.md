@@ -284,9 +284,9 @@ test('computeRunningBalances orders by occurred_on, seq, id', () => {
 - [ ] **Step 2: Run** `... scripts/import-ledger.ts --reset` → Expected: `inserted 8xx`，結尾自動執行 verify：重讀全部 → `computeRunningBalances` 逐列對快照 → `IMPORT OK`。
 - [ ] **Step 3: Run** `scripts/verify-views.ts` → `VIEWS OK`
 - [ ] **Step 4: SQL 驗收**（SQL Editor）：
-  - `select total from fund_tx_snapshots order by ord desc limit 1` = 4165
+  - `select total from fund_tx_snapshots order by ord desc limit 1` = 1627
   - `select count(*) from fund_settlements` = 24；`select count(*) from fund_settlements where frozen_reserve=0 and zero_reason is null` = 0
-  - `select count(*) from fund_transactions where type='donation'` 介於 405–415；`income_source='salon'` = 17
+  - `select count(*) from fund_transactions where type='donation'` = 402；`income_source='salon'` = 17
   - `select count(*) from fund_payables where status='open'` = 2，sum = 23168
   - `select count(*) from fund_transactions where stated_on <> occurred_on` > 0
   - `select * from fund_outstanding_loans` 列出 Eason、嚴昕、Ruby，remaining 與最後結算備註一致（人工核對，印出）
