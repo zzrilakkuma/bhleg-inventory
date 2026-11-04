@@ -7,7 +7,7 @@ import { insertTransaction } from '@/lib/fund-db';
 import { fmtAmount, TAG_GROUP_LABEL, type FundExpense, type FundTag, type FundTemplate } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
 import { nextSeq } from '@/lib/fund-v2/seq';
-import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring } from '@/lib/fund-v2/expense';
+import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, selectableStorages } from '@/lib/fund-v2/expense';
 import { Chip, SectionLabel } from '../ui';
 import { WaiveSheet, GroupSummarySheet } from './ExpenseSheets';
 
@@ -22,7 +22,6 @@ type RecentExpense = FundExpense;
 
 export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
   const mainAccount = refs.accounts.find((a) => a.kind === 'main') ?? refs.accounts[0];
-  const storages = refs.storages.filter((s) => s.active);
   const advancers = refs.advancers.filter((a) => a.active);
 
   const [amount, setAmount] = useState('');
@@ -36,6 +35,9 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
   const [note, setNote] = useState('');
   const [date, setDate] = useState(today());
   const [accountId, setAccountId] = useState<number>(mainAccount?.id ?? 0);
+  const storages = useMemo(
+    () => selectableStorages(refs.storages, refs.accounts.find((a) => a.id === accountId)),
+    [refs.storages, refs.accounts, accountId]);
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [waiveOpen, setWaiveOpen] = useState(false);
@@ -55,7 +57,8 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
     const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
     const q = await supabase.from('fund_expenses').select('vendor, fund_transactions!inner(occurred_on)')
       .gte('fund_transactions.occurred_on', `${curMonth}-01`).lt('fund_transactions.occurred_on', next);
-    if (!q.error) {
+    if (q.error) toast.error(`常用載入失敗：${q.error.message}`);
+    else {
       setMonthExp((q.data ?? []).map((x: any) => {
         const t = Array.isArray(x.fund_transactions) ? x.fund_transactions[0] : x.fund_transactions;
         return { vendor: x.vendor, occurred_on: t.occurred_on };
@@ -91,10 +94,15 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
       const a = advancers.find((x) => x.name === t.advancer_name);
       if (a) { setFrom(ADVANCE); setAdvancerId(a.id); }
     } else if (t.storage_name) {
-      const s = storages.find((x) => x.name === t.storage_name) ?? storages.find((x) => x.name.startsWith(t.storage_name!));
+      const s = selectableStorages(refs.storages).find((x) => x.name === t.storage_name)
+        ?? selectableStorages(refs.storages).find((x) => x.name.startsWith(t.storage_name!));
       if (s) { setFrom(s.id); setAdvancerId(null); }
     }
   };
+
+  useEffect(() => {
+    if (typeof from === 'number' && !storages.some((x) => x.id === from)) setFrom(null);
+  }, [storages, from]);
 
   const amt = Number(amount);
   const storage = typeof from === 'number' ? storages.find((s) => s.id === from) : undefined;

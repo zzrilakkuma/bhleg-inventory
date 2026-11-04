@@ -76,11 +76,12 @@ export function GroupSummarySheet({ open, onClose, refs, onDone }: {
 
   const set = (i: number, p: Partial<{ desc: string; amount: string }>) =>
     setItems((l) => l.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const monthOk = /^\d{4}-\d{2}$/.test(month);
   const valid = items.filter((x) => Number(x.amount) > 0);
   const total = valid.reduce((s, x) => s + Number(x.amount), 0);
 
   const submit = async () => {
-    if (!valid.length || !accountId || busy) return;
+    if (!valid.length || !accountId || busy || !monthOk) return;
     setBusy(true);
     try {
       const date = `${month}-28`;
@@ -118,7 +119,7 @@ export function GroupSummarySheet({ open, onClose, refs, onDone }: {
           ))}
           <button type="button" className="text-sm text-gray-400" onClick={() => setItems((l) => [...l, { desc: '', amount: '' }])}>＋ 加一項</button>
           <div className="text-sm text-gray-400 mt-3">合計 −{fmtAmount(total)}</div>
-          <button type="button" className={btnCls} disabled={!valid.length || busy} onClick={submit}>
+          <button type="button" className={btnCls} disabled={!valid.length || busy || !monthOk} onClick={submit}>
             {busy ? '寫入中...' : '記下'}
           </button>
         </>

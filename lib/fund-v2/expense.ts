@@ -98,3 +98,14 @@ export const waiveClaims = async (
     .in('transaction_id', transactionIds).eq('claim_status', 'unclaimed');
   if (error) throw error;
 };
+
+/** 「錢從哪裡出」可選存放：永不含「待清償」；主科目只有 郵局／現金；小組／專款再加各現金袋與其預設存放。 */
+export const selectableStorages = (
+  storages: FundStorage[], account?: { kind: string; default_storage_id: number | null },
+): FundStorage[] => {
+  const ok = storages.filter((s) => s.active && !/待清償/.test(s.name));
+  const grouped = !!account && (account.kind === 'group' || account.kind === 'special');
+  return ok.filter((s) =>
+    s.name === '郵局' || s.name === '現金' ||
+    (grouped && (s.name.startsWith('現金（') || s.id === account!.default_storage_id)));
+};

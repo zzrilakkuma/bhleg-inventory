@@ -84,3 +84,12 @@ test('waiveClaims updates only claim_status for unclaimed rows', async () => {
   await waiveClaims({ from: (t) => { calls.push(['from', t]); return q; } }, [4, 5]);
   assert.deepEqual(calls, [['from', 'fund_expenses'], ['update', { claim_status: 'waived' }], ['in', 'transaction_id', [4, 5]], ['eq', 'claim_status', 'unclaimed']]);
 });
+
+import { selectableStorages } from './expense.ts';
+test('selectableStorages: main -> 郵局/現金; group adds bags; 待清償 never', () => {
+  const st = (id: number, name: string): FundStorage => ({ id, name, active: true, sort_order: id });
+  const all = [st(1, '郵局'), st(2, '現金'), st(3, '現金（廚房）'), st(4, '現金（沙龍）'), st(9, '代墊（待清償）')];
+  assert.deepEqual(selectableStorages(all, { kind: 'main', default_storage_id: 1 }).map((s) => s.name), ['郵局', '現金']);
+  assert.deepEqual(selectableStorages(all, { kind: 'group', default_storage_id: 3 }).map((s) => s.name), ['郵局', '現金', '現金（廚房）', '現金（沙龍）']);
+  assert.ok(!selectableStorages(all, { kind: 'special', default_storage_id: 9 }).some((s) => /待清償/.test(s.name)));
+});
