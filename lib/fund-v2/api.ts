@@ -125,8 +125,9 @@ export interface UnclaimedExpense {
 }
 
 export const getUnclaimedExpenses = async (client: SupabaseClient): Promise<UnclaimedExpense[]> => {
+  // fund_expenses 有兩條 FK 指向 fund_transactions，需指定 fkey 才不會 embed 歧義
   const rows = unwrap<any[]>(await client.from('fund_expenses')
-    .select('transaction_id, advancer_id, vendor, tags, fund_transactions!inner(occurred_on, seq, stated_on, title, amount)')
+    .select('transaction_id, advancer_id, vendor, tags, fund_transactions!fund_expenses_transaction_id_fkey!inner(occurred_on, seq, stated_on, title, amount)')
     .eq('claim_status', 'unclaimed'));
   return rows
     .map((r) => {

@@ -50,12 +50,14 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
   const curMonth = today().slice(0, 7);
 
   const loadLists = useCallback(async () => {
-    const r = await supabase.from('fund_expenses').select('*, fund_transactions!inner(occurred_on)')
+    // 兩條 FK 指向 fund_transactions，需用 fkey 提示避免 embed 歧義
+    const r = await supabase.from('fund_expenses').select('*, fund_transactions!fund_expenses_transaction_id_fkey!inner(occurred_on)')
       .order('transaction_id', { ascending: false }).limit(300);
     if (!r.error) setRecent((r.data ?? []) as RecentExpense[]);
     const [y, m] = curMonth.split('-').map(Number);
     const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
-    const q = await supabase.from('fund_expenses').select('vendor, fund_transactions!inner(occurred_on)')
+    // 同上：fkey 提示
+    const q = await supabase.from('fund_expenses').select('vendor, fund_transactions!fund_expenses_transaction_id_fkey!inner(occurred_on)')
       .gte('fund_transactions.occurred_on', `${curMonth}-01`).lt('fund_transactions.occurred_on', next);
     if (q.error) toast.error(`常用載入失敗：${q.error.message}`);
     else {
