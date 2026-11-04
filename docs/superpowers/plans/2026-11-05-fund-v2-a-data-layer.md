@@ -17,7 +17,7 @@
 - 所有新表／欄位放 `supabase/fund/00N_*.sql`，可重複執行（`if not exists`、`do $$`）；在 Supabase SQL Editor 依序執行，或 `psql "$DATABASE_URL" -f`。
 - 金額欄位一律 `numeric(12,0)`；交易排序鍵固定為 `(occurred_on, seq, id)`。
 - 匯入是一次性的：`--reset` 刪除所有 `fund_transactions`（cascade）與 `fund_payables`、`transaction_id is null` 的 `fund_loans`；保留 members／handlers／storages／accounts／advancers／tags／templates。
-- 匯入驗證終點：總表列 885，匯入後小結必須 = 4,165；列 892–893 進 `fund_payables`。
+- 匯入驗證終點：總表列 885，匯入後小結必須 = 1,627；列 892–893 進 `fund_payables`。
 - 放棄請款（`waived`）與未請款代墊（`off_ledger`）不得產生 `fund_lines`。
 - 腳本用 `node --experimental-strip-types --env-file=.env.local`，匯入以 `SUPABASE_SERVICE_ROLE_KEY`。
 - 測試指令：`npm test`（= `node --experimental-strip-types --test "lib/**/*.test.ts" "scripts/**/*.test.ts"`）。
@@ -291,7 +291,7 @@ test('computeRunningBalances orders by occurred_on, seq, id', () => {
   - `select count(*) from fund_transactions where stated_on <> occurred_on` > 0
   - `select * from fund_outstanding_loans` 列出 Eason、嚴昕、Ruby，remaining 與最後結算備註一致（人工核對，印出）
 - [ ] **Step 5: 再跑一次不加 `--reset`** → Expected: exit 2、資料筆數不變。
-- [ ] **Step 6: 開舊 `/fund`**（preview）→ 最上方小結 4,165，流水帳可捲到 2024/11。
+- [ ] **Step 6: 開舊 `/fund`**（preview）→ 最上方小結 1,627，流水帳可捲到 2024/11。
 - [ ] **Step 7: Commit** `feat(import): write mode, backfills and post-import verification`
 
 ---

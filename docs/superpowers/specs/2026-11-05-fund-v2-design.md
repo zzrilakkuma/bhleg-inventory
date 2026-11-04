@@ -38,7 +38,7 @@
 - Next.js 16 App Router、Supabase（Postgres + PostgREST + RLS）、無 ORM；schema 以 `supabase/fund/00N_*.sql` 累加。
 - PostgREST 單次最多回 1000 列。
 - 登入是「名稱 + 密碼」經 `login-with-name` edge function；會計與參與者目前沒有角色區分。
-- 總表資料特性：893 列、63 筆多金額儲存格、492 種 hashtag、日期列序 ≠ 日期序（歸零清算區）、4 列未請款代墊在帳上為零、凍存實務 = 不凍結零用金 × 30% × 2、2025/04 起結算皆在次月 1–7 日。
+- 總表資料特性：893 列、63 筆多金額儲存格、492 種 hashtag、日期列序 ≠ 日期序（歸零清算區）、1 列未請款代墊（544）與 6 列放棄請款在帳上為零、凍存實務 = 不凍結零用金 × 30% × 2、2025/04 起結算皆在次月 1–7 日。
 
 ## 4. 考慮過的做法
 
@@ -80,7 +80,7 @@
 - 六段：parse（RFC4180、BOM）→ normalize（日期、多金額 token、hashtag → 存放／代墊／內嵌轉帳、快照解析＋別名）→ classify（型別與 income_source）→ reconcile（以快照差為準，Δ→lines 解算器；不符即中止）→ write（`seq=import_row`、`occurred_on` 單調化、原日期存 `stated_on`、子表）→ verify（重讀全部跑 `computeRunningBalances` 逐列 diff）。
 - 代墊 Δ=0 的 1 列（列 544）→ `off_ledger/unclaimed`；Δ≠0 的 107 列 → `claimed`；放棄請款／無須支付 6 列（471–473、707、798、799）→ `waived`（金額記被放棄的費用，不產生 lines）。
 - 非成員奉納者不建成員，記 `income/event`。缺的科目／存放建立後停用。
-- 驗收：末列小結 = 1,627（末兩列 892–893 進 `fund_payables`，列 885 為驗證終點）、24 筆結算、凍存 0 的 7 筆有 `zero_reason`、重跑不重複。
+- 驗收：末列小結 = 1,627（末兩列 892–893 進 `fund_payables`，列 885 為驗證終點）、24 筆結算、凍存 0 的 8 筆有 `zero_reason`、重跑不重複。
 
 ### 5.5 公基金 V2 的 UI（使用者決定：原「公基金 流水帳」`/fund/*` 保留不動，V2 另開新路徑與首頁入口）
 
