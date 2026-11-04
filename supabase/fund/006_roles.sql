@@ -1,4 +1,7 @@
 -- 006：角色（會計 / 一般會員）與唯讀 RLS。可重複執行。
+-- 必須在 001–005 之後套用；重新套用任何較舊的 migration 後，請再執行一次
+--   select fund_apply_policies();
+-- （否則舊檔的 *_authenticated_all 會讓所有人重新取得寫入權）。後續 007、008 結尾都會呼叫它。
 
 create table if not exists fund_roles (
   user_id    uuid primary key references auth.users(id) on delete cascade,
@@ -14,7 +17,7 @@ language sql security definer stable set search_path = public as $$
 $$;
 
 -- 對所有 public.fund_% 表：登入者可讀，僅會計可寫
-do $$
+create or replace function fund_apply_policies() returns void language plpgsql as $$
 declare t text;
 begin
   for t in select tablename from pg_tables where schemaname = 'public' and tablename like 'fund\_%' loop
@@ -26,6 +29,8 @@ begin
     execute format('create policy "%s_write" on %I for all to authenticated using (fund_is_accountant()) with check (fund_is_accountant())', t, t);
   end loop;
 end $$;
+
+select fund_apply_policies();
 
 -- seed：會計
 insert into fund_roles (user_id, role)
