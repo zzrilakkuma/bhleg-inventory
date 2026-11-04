@@ -6,6 +6,7 @@ import { getRefs, getLatestSnapshot, type Refs, type Snapshot } from '@/lib/fund
 import { RoleGate } from '../role-gate';
 import { Amount } from '../ui';
 import ExpenseForm from './ExpenseForm';
+import IncomeForm from './IncomeForm';
 
 type Mode = 'expense' | 'income' | 'transfer';
 const MODES: { k: Mode; label: string }[] = [
@@ -45,7 +46,8 @@ export default function RecordPage() {
         {err && <p className="text-[#FF0055] text-sm mb-3">{err}</p>}
         {!refs && !err && <p className="text-gray-500 text-sm">載入中...</p>}
         {refs && mode === 'expense' && <ExpenseForm refs={refs} onSaved={reloadSnap} />}
-        {refs && mode !== 'expense' && <p className="text-gray-500 text-sm">下一步實作</p>}
+        {refs && mode === 'income' && <IncomeForm refs={refs} onSaved={reloadSnap} />}
+        {refs && mode === 'transfer' && <p className="text-gray-500 text-sm">下一步實作</p>}
       </div>
     </RoleGate>
   );
