@@ -1,6 +1,8 @@
 -- 008：餘額快照與期間統計 view。可重複執行。必須在 001–007 之後套用。
 -- 演算法與 lib/fund.ts#computeRunningBalances 一致：依 occurred_on, seq, id 排序，累加所有 fund_lines。
 
+drop view if exists fund_period_summary, fund_periods, fund_tx_snapshots, fund_tx_ordered, fund_outstanding_loans, fund_advances_owed, fund_waived_total cascade;
+
 create index if not exists fund_lines_tx_idx on fund_lines(transaction_id);
 
 create or replace view fund_tx_ordered as
@@ -61,6 +63,7 @@ select p.month,
                    where t.ord between p.start_ord and p.end_ord
                      and t.type in ('donation','income','refund','loan')
                      and t.amount > 0
+                     and not t.off_ledger
                    group by 1) i), '{}'::jsonb) as income_by_source,
        coalesce((select jsonb_object_agg(g, v) from (
                    select c.g, sum(c.amt) as v from (
@@ -77,10 +80,11 @@ select p.month,
                      from fund_tx_ordered t
                      where t.ord between p.start_ord and p.end_ord
                        and t.type in ('expense','expense_claim','repayment')
+                       and not t.off_ledger
                    ) c group by c.g) x), '{}'::jsonb) as expense_by_group,
        coalesce((select sum(t.amount) from fund_tx_ordered t
                   where t.ord between p.start_ord and p.end_ord
-                    and t.income_source = 'salon'), 0) as salon_income
+                    and t.income_source = 'salon' and not t.off_ledger), 0) as salon_income
 from fund_periods p
 join fund_tx_snapshots e on e.ord = p.end_ord;
 
