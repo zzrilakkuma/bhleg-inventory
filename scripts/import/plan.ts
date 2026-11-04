@@ -218,6 +218,21 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
   // Rows after the last snapshot row whose dates lack a day are future bills, not transactions.
   const lastSnapRow = Math.max(0, ...rows.filter((r) => parseSnapshot(r.snapshotCell)).map((r) => r.row))
 
+  // 歸零清算 zone: rows after the last snapshot before the reset row, up to the next opening row,
+  // all occur on the reset row's date (their own dates stay in statedOn).
+  const resetIdx = rows.findIndex((r) => r.kind.trim() === '歸零清算')
+  let zone: { from: number; to: number; date: string } | null = null
+  if (resetIdx >= 0) {
+    const reset = rows[resetIdx]
+    const before = rows.slice(0, resetIdx).filter((r) => parseSnapshot(r.snapshotCell))
+    const opening = rows.slice(resetIdx + 1).find((r) => r.kind.includes('二階實踐') || r.kind.trim() === '初始金額')
+    zone = {
+      from: before.length ? before[before.length - 1].row + 1 : reset.row,
+      to: opening ? opening.row - 1 : reset.row,
+      date: parseDate(reset.date, '').occurred,
+    }
+  }
+
   const push = (tx: PlannedTx) => {
     txs.push(tx)
     apply(tx.lines)
@@ -260,7 +275,8 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
     const d = parseDate(r.date, prevDateForParse)
     if (d.warn) rowWarns.push(d.warn)
     prevDateForParse = d.occurred
-    const occurredOn = d.occurred > prevOccurred ? d.occurred : prevOccurred
+    const inZone = zone !== null && r.row >= zone.from && r.row <= zone.to
+    const occurredOn = inZone ? zone!.date : d.occurred > prevOccurred ? d.occurred : prevOccurred
     const title = r.title.trim()
     const vendor = title.match(/【(.+?)】/)?.[1]?.trim() ?? null
 
@@ -336,6 +352,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
       base.amount = 0
       base.seq = r.row * 10 + 1
       const sid = tags.storage === CASH ? cashId() : postId()
+      let k = 0
       for (const m of r.note.matchAll(REPAY_RE)) {
         const principal = num(m[1])
         const fee = m[2] ? num(m[2]) : 0
@@ -343,6 +360,9 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
         const rtx: PlannedTx = {
           ...base,
           type: 'repayment',
+          // Negative so the partial unique index on import_row holds; a second repayment in the
+          // same settlement note would collide on -row, so it gets -(row*10+k).
+          importRow: k === 0 ? -r.row : -(r.row * 10 + k),
           seq: r.row * 10,
           title: `償還 ${lender} 所提供之借款（${title.replace(/\*/g, '')}）`,
           voucher: null,
@@ -355,6 +375,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
           warns: [],
         }
         extraTxs.push(rtx)
+        k++
       }
       freezeBase = accountBalance(refs.mainId) - sum(extraTxs.map((t) => -t.amount))
     }

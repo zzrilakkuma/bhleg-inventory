@@ -145,9 +145,10 @@ test('settlement: repayments extracted first, solver freeze lines, settlement su
     }),
   ], refs)
   assert.deepEqual(p.mismatches, [])
-  assert.deepEqual(p.txs.map((t) => [t.type, t.seq, t.amount]), [
-    ['opening', 20, 2000], ['repayment', 30, -312], ['repayment', 30, -300], ['settlement', 31, 0],
+  assert.deepEqual(p.txs.map((t) => [t.type, t.importRow, t.seq, t.amount]), [
+    ['opening', 2, 20, 2000], ['repayment', -3, 30, -312], ['repayment', -31, 30, -300], ['settlement', 3, 31, 0],
   ])
+  assert.equal(new Set(p.txs.map((t) => t.importRow)).size, p.txs.length, 'import_row unique')
   const [, r1, r2, st] = p.txs
   assert.deepEqual(r1.lines, [{ account_id: 1, storage_id: 101, amount: -312, label: null }])
   assert.deepEqual(r1.sub, { table: 'fund_repayments', row: { loan_id: null, amount: 300, fee: 12, loan_ref: { pre_loan: '嚴昕' } } })
@@ -204,7 +205,7 @@ test('reset: negates every balance after the no-checkpoint rows; opening of phas
     { account_id: 1, storage_id: 102, amount: -400, label: null },
   ])
   assert.equal(reset.amount, -1400)
-  assert.equal(reset.occurredOn, '2026-01-16')
+  assert.equal(reset.occurredOn, '2026-01-15') // zone date (row 4's own 1/16 stays in statedOn)
   assert.deepEqual(p.txs[3].lines, [])
   assert.ok(p.warns.some((w) => /reset row 3: rows 4 had no checkpoint/.test(w)))
 })
@@ -327,4 +328,26 @@ test('transfer row without a parseable transfer tag and no checkpoint warns (row
   assert.equal(t.amount, 0)
   assert.deepEqual(t.lines, [])
   assert.ok(p.warns.includes('row 3: transfer with no resolvable lines'))
+})
+
+test('歸零清算 zone: rows from after the last snapshot to before the opening occur on the reset date', () => {
+  const exp = (row: number, date: string, snapshotCell = '') =>
+    mk({ row, kind: '支出', date, title: '【某店】\n東西', amountCell: '-10', note: '#現金袋支付', snapshotCell })
+  const p = planImport([
+    opening({ 不凍結零用金: 1000, 郵局: 0, 現金: 1000 }, '1000'),
+    exp(3, '2026/1/13'),
+    mk({ row: 4, kind: '歸零清算', date: '2026/1/15\n（歸零清算）', title: '***總結算***', amountCell: '歸零清算', snapshotCell: '122200元' }),
+    exp(5, '2026/1/28', '#已繳納\n剩餘：100元\n'),
+    exp(6, '2025/7/0\n（延後結算）'),
+    mk({ row: 7, kind: '二階實踐\n初始金額', date: '2026/1/15', title: '***二階***', amountCell: '***一階歸零***', snapshotCell: snap({ 不凍結零用金: 0, 郵局: 0, 現金: 0 }) }),
+    mk({ row: 8, kind: '收入', date: '2026/1/5', title: '巢穴人 嚴昕 奉納', amountCell: '1000', note: '#巢穴共同體成員奉納\n#嚴昕 #匯入 #存放郵局', snapshotCell: snap({ 不凍結零用金: 1000, 郵局: 1000, 現金: 0 }) }),
+  ], refs)
+  const on = Object.fromEntries(p.txs.map((t) => [t.importRow, [t.occurredOn, t.statedOn]]))
+  assert.deepEqual(on[3], ['2026-01-15', '2026-01-13'])
+  assert.deepEqual(on[4], ['2026-01-15', '2026-01-15'])
+  assert.deepEqual(on[5], ['2026-01-15', '2026-01-28'])
+  assert.deepEqual(on[6], ['2026-01-15', null])
+  assert.deepEqual(on[7], ['2026-01-15', '2026-01-15'])
+  assert.deepEqual(on[8], ['2026-01-15', '2026-01-05']) // monotonic again after the zone
+  assert.deepEqual(p.mismatches, [])
 })
