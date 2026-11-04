@@ -1,6 +1,6 @@
 // Turns the ledger's RawRow sequence into the transactions to write (pure; no I/O).
 import type { FundTransactionType, IncomeSource } from '../../lib/fund.ts'
-import { ACCOUNT_ALIASES, MEMBER_ALIASES } from './aliases.ts'
+import { ACCOUNT_ALIASES, MEMBER_ALIASES, TAG_ALIASES } from './aliases.ts'
 import { classifyRow } from './classify.ts'
 import { parseAmounts, parseDate, parseSnapshot, parseTags, type RawRow } from './normalize.ts'
 import { buildLines, candidateLines, checkLines, snapshotDelta, solveLines, type Delta, type Line, type Refs } from './reconcile.ts'
@@ -169,7 +169,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
   const expenseTags = (note: string) => {
     const out: string[] = []
     for (const t of note.match(/#[^\s#]+/g) ?? []) {
-      const n = t.slice(1)
+      const n = TAG_ALIASES[t.slice(1)] ?? t.slice(1)
       const hit = tagNames.has(n) ? n : n.startsWith('巢穴共同體') && tagNames.has(n.slice(5)) ? n.slice(5) : null
       if (hit && !out.includes(hit)) out.push(hit)
     }
@@ -377,7 +377,8 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
         extraTxs.push(rtx)
         k++
       }
-      freezeBase = accountBalance(refs.mainId) - sum(extraTxs.map((t) => -t.amount))
+      // Freeze base is the main balance before the split repayments (notes: `#不凍結零用金剩餘：8664*30%`).
+      freezeBase = accountBalance(refs.mainId)
     }
 
     // Lines.
@@ -472,7 +473,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
       plannedLoans.push({ importRow: r.row, lender, memberId: member?.id ?? null })
       base.sub = {
         table: 'fund_loans',
-        row: { lender_name: lender, lender_member_id: member?.id ?? null, principal: amount, started_on: occurredOn, status: 'open', note: null },
+        row: { lender_name: lender, lender_member_id: member?.id ?? null, principal: amount, started_on: d.stated ?? occurredOn, status: 'open', note: null },
       }
     } else if (cls.type === 'repayment') {
       const m = title.match(/償還\s*(.+?)(?:所提供|借)/)
@@ -504,7 +505,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
           freeze_base: freezeBase,
           frozen_reserve: frozenReserve,
           frozen_future: frozenFuture,
-          zero_reason: r.note.includes('因餘款不足') ? '因餘款不足' : frozenReserve === 0 && frozenFuture === 0 ? '匯入：原因未註明' : null,
+          zero_reason: /餘額不足|餘款不足/.test(r.note) ? '因餘款不足' : frozenReserve === 0 && frozenFuture === 0 ? '匯入：原因未註明' : null,
           late_days: Math.max(0, daysBetween(`${month}-20`, settledOn)),
         },
       }

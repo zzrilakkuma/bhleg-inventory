@@ -27,3 +27,8 @@ export const MEMBER_ALIASES: Record<string, string> = {
 }
 
 export const NON_MEMBER_DONORS: string[] = ['佳凌', '匿名', 'Jessie', 'Lucy姊', 'Betty', '中央蘭室']
+
+/** Expense hashtags (without #) that map to a fund_tags name. */
+export const TAG_ALIASES: Record<string, string> = {
+  初一十五拜拜用品: '拜拜用品',
+}

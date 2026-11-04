@@ -160,7 +160,7 @@ test('settlement: repayments extracted first, solver freeze lines, settlement su
     table: 'fund_settlements',
     row: {
       month: '2026-10', period_no: 1, actual_post: null, actual_cash: null, system_post: 1388, system_cash: null,
-      freeze_base: 1388, frozen_reserve: 300, frozen_future: 300, zero_reason: null, late_days: 14,
+      freeze_base: 2000, frozen_reserve: 300, frozen_future: 300, zero_reason: null, late_days: 14,
     },
   })
   assert.deepEqual(p.preLoans, [
@@ -174,10 +174,11 @@ test('settlement: 12月結算 in January is previous year; zero freeze reasons; 
     mk({ row, kind: '結算', date, title, amountCell: title, note, snapshotCell: snap({ 不凍結零用金: 100, 緊急應變備用金: 0, 共存前瞻預算: 0, 郵局: 100 }) })
   const p = planImport([
     opening({ 不凍結零用金: 100, 緊急應變備用金: 0, 共存前瞻預算: 0, 郵局: 100 }, '100'),
-    s(3, '2026/1/7\n（延後結算）', '***12月結算***', '#不凍結資金餘額不足'),
+    s(3, '2026/1/7\n（延後結算）', '***12月結算***', '#不凍結零用金0元以「緊急應變備用金」凍存'),
     s(4, '2026/1/9', '***12月結算***', '#因餘款不足'),
+    s(5, '2026/1/10', '***12月結算***', '#不凍結資金餘額不足'),
   ], refs)
-  const [a, b] = p.txs.filter((t) => t.type === 'settlement').map((t) => t.sub!.row)
+  const [a, b, c] = p.txs.filter((t) => t.type === 'settlement').map((t) => t.sub!.row)
   assert.equal(a.month, '2025-12')
   assert.equal(a.period_no, 1)
   assert.equal(a.zero_reason, '匯入：原因未註明')
@@ -185,6 +186,8 @@ test('settlement: 12月結算 in January is previous year; zero freeze reasons; 
   assert.equal(b.period_no, 2)
   assert.equal(p.txs.find((t) => t.importRow === 3)!.seq, 35)
   assert.equal(b.zero_reason, '因餘款不足')
+  assert.equal(c.zero_reason, '因餘款不足') // rows 300/322/382 wording
+  assert.equal(c.period_no, 3)
 })
 
 test('reset: negates every balance after the no-checkpoint rows; opening of phase 2 starts from zero', () => {
@@ -366,5 +369,30 @@ test('real row 467 (1月結算, two repayments): repayment and settlement keys',
   assert.deepEqual(p.txs.slice(1).map((t) => [t.type, t.importRow, t.seq]), [
     ['repayment', -4670, 4670], ['repayment', -4671, 4671], ['settlement', 467, 4675],
   ])
+  const st = p.txs.find((t) => t.importRow === 467)!.sub!.row
+  assert.equal(st.freeze_base, 8664) // note: 8664*30%=2599
+  assert.equal(st.frozen_reserve, 2599)
+  assert.equal(st.frozen_future, 2599)
   assert.equal(new Set(p.txs.map((t) => t.importRow)).size, p.txs.length)
+})
+
+test('loan in the 歸零清算 zone keeps its stated date as started_on', () => {
+  const p = planImport([
+    opening({ 不凍結零用金: 0, 郵局: 0 }),
+    mk({ row: 3, kind: '收入', date: '2026/1/13\n（特別結算）', title: '巢穴人 嚴昕 借款\n***巢穴緊急紓困借款***', amountCell: '20000', note: '#巢穴共同體成員奉納\n#巢穴緊急紓困借款（一階結算與巢穴債務整合）\n#嚴昕 #匯入 #存放郵局\n' }),
+    mk({ row: 4, kind: '歸零清算', date: '2026/1/15\n（歸零清算）', title: '***總結算***', amountCell: '歸零清算' }),
+    mk({ row: 5, kind: '二階實踐\n初始金額', date: '2026/1/15', title: '***二階***', amountCell: '***一階歸零***', snapshotCell: snap({ 不凍結零用金: 0, 郵局: 0 }) }),
+  ], refs)
+  const loan = p.txs.find((t) => t.type === 'loan')!
+  assert.equal(loan.occurredOn, '2026-01-15')
+  assert.equal(loan.sub!.row.started_on, '2026-01-13')
+})
+
+test('expense tag alias 初一十五拜拜用品 → 拜拜用品', () => {
+  const r = { ...refs, tags: [...refs.tags, { id: 99, name: '拜拜用品' }] }
+  const p = planImport([
+    opening({ 不凍結零用金: 1000, 郵局: 1000 }, '1000'),
+    mk({ row: 3, kind: '支出', date: '2026/3/1', title: '【全聯】\n拜拜', amountCell: '-100', note: '#巢穴 #儀式 #初一十五拜拜用品\n#郵局支出', snapshotCell: snap({ 不凍結零用金: 900, 郵局: 900 }) }),
+  ], r)
+  assert.deepEqual(p.txs[1].sub!.row.tags, ['巢穴', '拜拜用品'])
 })

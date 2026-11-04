@@ -48,6 +48,11 @@ export function printPlan(plan: Plan, rowCount: number) {
   console.log('by type:', countBy(txs, (t) => t.type))
   console.log('by income_source:', countBy(txs.filter((t) => t.incomeSource), (t) => t.incomeSource!))
   console.log(`settlements: ${txs.filter((t) => t.type === 'settlement').length}`)
+  for (const t of txs.filter((x) => x.type === 'settlement')) {
+    const r = t.sub!.row
+    const base = Number(r.freeze_base)
+    console.log(`  settlement row ${t.importRow} ${r.month}#${r.period_no}: freeze_base ${base} ×30%=${Math.round(base * 0.3)} frozen ${r.frozen_reserve}/${r.frozen_future} zero_reason ${r.zero_reason ?? '-'}`)
+  }
   console.log(`offLedger: ${txs.filter((t) => t.offLedger).length}`, countBy(txs.filter((t) => t.sub?.table === 'fund_expenses'), (t) => String(t.sub!.row.claim_status)))
   const keys = new Set(txs.map((t) => t.importRow))
   const seqKeys = new Set(txs.map((t) => `${t.occurredOn}|${t.seq}`))
