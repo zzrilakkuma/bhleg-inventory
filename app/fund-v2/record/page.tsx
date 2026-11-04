@@ -7,6 +7,7 @@ import { RoleGate } from '../role-gate';
 import { Amount } from '../ui';
 import ExpenseForm from './ExpenseForm';
 import IncomeForm from './IncomeForm';
+import TransferForm from './TransferForm';
 
 type Mode = 'expense' | 'income' | 'transfer';
 const MODES: { k: Mode; label: string }[] = [
@@ -47,7 +48,7 @@ export default function RecordPage() {
         {!refs && !err && <p className="text-gray-500 text-sm">載入中...</p>}
         {refs && mode === 'expense' && <ExpenseForm refs={refs} onSaved={reloadSnap} />}
         {refs && mode === 'income' && <IncomeForm refs={refs} onSaved={reloadSnap} />}
-        {refs && mode === 'transfer' && <p className="text-gray-500 text-sm">下一步實作</p>}
+        {refs && mode === 'transfer' && <TransferForm refs={refs} snapshot={snap} onSaved={reloadSnap} />}
       </div>
     </RoleGate>
   );
