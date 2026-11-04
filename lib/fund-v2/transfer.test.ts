@@ -71,6 +71,13 @@ test('validateTransfer', () => {
   assert.equal(validateTransfer(post, emerg, 50, ''), null);
   assert.equal(validateTransfer(S(10, 'x', 5), A(10, 'y', 0, 'group'), 1, ''), null); // same id, different kind
 });
+test('validateTransfer: main guard only for storage→account', () => {
+  assert.equal(validateTransfer(post, emerg, 50, '', 40), '不凍結零用金不足');
+  assert.equal(validateTransfer(post, emerg, 40, '', 40), null);
+  assert.equal(validateTransfer(post, cash, 50, '', 40), null);
+  assert.equal(validateTransfer(kitchen, salon, 50, '', 40), null);
+  assert.equal(validateTransfer(emerg, cash, 50, '第1次', 40), null);
+});
 test('afterTransfer: 郵局→現金 touches storages only (main unchanged)', () => {
   const r = afterTransfer(snap(), buildTransferWrite(post, cash, 20, '2026-11-05', refs), refs);
   assert.deepEqual(r, [{ label: '郵局', before: 54, after: 34 }, { label: '現金', before: 400, after: 420 }]);

@@ -73,10 +73,13 @@ export const buildTransferWrite = (
   };
 };
 
-export const validateTransfer = (from: Slot, to: Slot, amount: number, decisionRef: string): string | null => {
+export const validateTransfer = (
+  from: Slot, to: Slot, amount: number, decisionRef: string, mainBalance = Infinity,
+): string | null => {
   if (!(amount > 0)) return '金額必須大於 0';
   if (sameSlot(from, to)) return '來源與目的相同';
   if (amount > from.balance) return '來源餘額不足';
+  if (from.kind === 'storage' && to.kind === 'account' && amount > mainBalance) return '不凍結零用金不足';
   if (from.kind === 'account' && from.accountKind === 'reserve' && !decisionRef.trim()) {
     return '從緊急應變／前瞻搬出需填依據（第幾次會議）';
   }
