@@ -38,3 +38,14 @@ export const pageWindow = (
   const from = periods[Math.min(periods.length - 1, selectedIndex + loadedMore)];
   return { fromOrd: from.start_ord, toOrd: selectedIndex === 0 ? latestOrd : sel.end_ord };
 };
+
+export interface EditFields { title: string; date: string; note: string; comment: string }
+
+/** 日期欄只有在使用者真的改過（相對於顯示日期）才寫入 occurred_on／stated_on。 */
+export const buildEditPatch = (original: EditFields, edited: EditFields) => {
+  const patch: {
+    title: string; note: string | null; comment: string | null; occurred_on?: string; stated_on?: string;
+  } = { title: edited.title, note: edited.note || null, comment: edited.comment || null };
+  if (edited.date !== original.date) { patch.occurred_on = edited.date; patch.stated_on = edited.date; }
+  return patch;
+};

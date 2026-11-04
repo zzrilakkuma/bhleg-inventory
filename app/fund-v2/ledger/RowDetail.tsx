@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { formatSnapshot, SUBTYPE_LABEL } from '@/lib/fund';
 import { updateTransaction, deleteTransaction } from '@/lib/fund-db';
 import type { LedgerRow, Refs } from '@/lib/fund-v2/api';
+import { buildEditPatch, dateOf } from '@/lib/fund-v2/ledger';
 import { Chip } from '../ui';
 
 const CLAIM_LABEL: Record<string, string> = { unclaimed: '待請款', claimed: '已請款', waived: '放棄請款' };
@@ -14,7 +15,7 @@ export default function RowDetail({ row, refs, isAccountant, onChanged }: {
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(row.title);
-  const [occurredOn, setOccurredOn] = useState(row.occurred_on);
+  const [occurredOn, setOccurredOn] = useState(dateOf(row));
   const [note, setNote] = useState(row.note ?? '');
   const [comment, setComment] = useState(row.comment ?? '');
   const [busy, setBusy] = useState(false);
@@ -25,7 +26,10 @@ export default function RowDetail({ row, refs, isAccountant, onChanged }: {
   const save = async () => {
     setBusy(true);
     try {
-      await updateTransaction(row.id, { title, occurred_on: occurredOn, stated_on: occurredOn, note: note || null, comment: comment || null });
+      await updateTransaction(row.id, buildEditPatch(
+        { title: row.title, date: dateOf(row), note: row.note ?? '', comment: row.comment ?? '' },
+        { title, date: occurredOn, note, comment },
+      ));
       toast.success('已更新');
       setEditing(false);
       onChanged();

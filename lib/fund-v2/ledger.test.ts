@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupByDate, rowSummary, pageWindow, categoryOf } from './ledger.ts';
+import { buildEditPatch, groupByDate, rowSummary, pageWindow, categoryOf } from './ledger.ts';
 import type { LedgerRow, FundPeriod } from './api.ts';
 
 const row = (o: Partial<LedgerRow>): LedgerRow => ({
@@ -56,4 +56,18 @@ test('pageWindow: loadedMore extends fromOrd, clamped', () => {
 });
 test('pageWindow: no periods -> whole ledger', () => {
   assert.deepEqual(pageWindow([], 0, 0, 7), { fromOrd: 1, toOrd: 7 });
+});
+
+test('buildEditPatch: title-only change leaves dates out', () => {
+  const o = { title: 'a', date: '2026-10-07', note: '', comment: '' };
+  const p = buildEditPatch(o, { ...o, title: 'b' });
+  assert.equal('occurred_on' in p, false);
+  assert.equal('stated_on' in p, false);
+  assert.equal(p.title, 'b');
+});
+test('buildEditPatch: date change sets both keys', () => {
+  const o = { title: 'a', date: '2026-10-07', note: '', comment: '' };
+  const p = buildEditPatch(o, { ...o, date: '2026-10-08' });
+  assert.equal(p.occurred_on, '2026-10-08');
+  assert.equal(p.stated_on, '2026-10-08');
 });
