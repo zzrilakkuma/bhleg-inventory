@@ -21,9 +21,10 @@ function classifyIncome(r: RawRow, tags: ReturnType<typeof parseTags>): Classifi
   if (/回注/.test(title)) return out('refund', 'reinject')
   const loanTagAsMember = tags.member !== null && /借款|借貸|紓困/.test(tags.member)
   if (donorTag && !nonMember && !loanTagAsMember) return out('donation', 'donation')
+  // A member's regular donation recorded under an anonymous donor tag (#匿名 #巢穴人 ...): income/donation, no member.
+  if (donorTag && nonMember && /#巢穴人|#巢穴眾/.test(note)) return out('income', 'donation')
   if (/#沙龍營業|#營業收入|沙龍營業/.test(title + '\n' + note)) return out('income', 'salon')
   if (/借款|借貸|紓困借/.test(title + '\n' + note)) return out('loan', 'loan')
-  if (/回注|回流/.test(title + '\n' + note)) return out('refund', 'reinject')
   if (note.includes('#利息')) return out('income', 'interest')
   if (/隨喜/.test(title + '\n' + note)) return out('income', 'kitchen')
   if (/自由の奉納|巢流祭|聚餐|分攤|活動收入/.test(title + '\n' + note) || (donorTag && nonMember)) {

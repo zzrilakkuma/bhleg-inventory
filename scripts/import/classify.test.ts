@@ -28,6 +28,16 @@ test('non-member donor -> income/event', () => {
   assert.equal(r2.incomeSource, 'event')
 })
 
+test('anonymous member donation (row 494) -> income/donation', () => {
+  const r = c({
+    kind: '收入',
+    title: '匿名巢穴人 奉納\n2月 奉納金 ',
+    note: '#巢穴共同體成員奉納\n#匿名 #巢穴人 #影子 \n#於巢穴由艾摩爾經手',
+  })
+  assert.equal(r.type, 'income')
+  assert.equal(r.incomeSource, 'donation')
+})
+
 test('salon income', () => {
   const r = c({ kind: '收入', title: '沙龍收入', note: '#巢穴 #沙龍營業 #營業收入' })
   assert.equal(r.type, 'income')
