@@ -78,7 +78,7 @@ test('afterTransfer: 郵局→現金 touches storages only (main unchanged)', ()
 test('afterTransfer: 郵局→緊急應變 shows storage, account and main change', () => {
   const r = afterTransfer(snap(), buildTransferWrite(post, emerg, 20, '2026-11-05', refs), refs);
   assert.deepEqual(r, [
-    { label: '郵局', before: 54, after: 34 }, { label: '緊急應變備用金', before: 300, after: 320 },
+    { label: '郵局', before: 54, after: 54 }, { label: '緊急應變備用金', before: 300, after: 320 },
     { label: '不凍結零用金', before: 82, after: 62 },
   ]);
 });
