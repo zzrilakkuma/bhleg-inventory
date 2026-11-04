@@ -100,12 +100,12 @@ export interface LedgerRow {
 }
 
 export const getLedgerRows = async (
-  client: SupabaseClient, range: { fromOrd?: number; toOrd?: number } = {},
+  client: SupabaseClient, range: { fromOrd: number; toOrd: number },
 ): Promise<LedgerRow[]> => {
-  let q = client.from('fund_ledger_rows').select('*');
-  if (range.fromOrd != null) q = q.gte('ord', range.fromOrd);
-  if (range.toOrd != null) q = q.lte('ord', range.toOrd);
-  const rows = unwrap<any[]>(await q.order('ord', { ascending: false }).limit(1000));
+  const limit = Math.max(1, range.toOrd - range.fromOrd + 1);
+  const rows = unwrap<any[]>(await client.from('fund_ledger_rows').select('*')
+    .gte('ord', range.fromOrd).lte('ord', range.toOrd)
+    .order('ord', { ascending: false }).limit(limit));
   return rows.map((r) => ({
     ...r, id: num(r.id), ord: num(r.ord), seq: num(r.seq), amount: num(r.amount),
     total: num(r.total), main: num(r.main), accounts: numMap(r.accounts), storages: numMap(r.storages),
