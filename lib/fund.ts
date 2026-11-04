@@ -8,6 +8,9 @@ export interface FundMember {
   default_last5: string | null;
   active: boolean;
   sort_order: number;
+  joined_at: string | null;
+  left_at: string | null;
+  exit_note: string | null;
 }
 
 export interface FundHandler { id: number; name: string; active: boolean; sort_order: number }
@@ -23,19 +26,19 @@ export interface FundAccount {
 
 export type FundTransactionType =
   | 'donation' | 'income' | 'expense' | 'loan' | 'repayment' | 'refund'
-  | 'transfer' | 'settlement' | 'opening' | 'group_summary' | 'reset';
+  | 'transfer' | 'settlement' | 'opening' | 'group_summary' | 'reset' | 'expense_claim';
 
 export const TYPE_LABEL: Record<FundTransactionType, string> = {
   donation: '收入', income: '收入', expense: '支出', loan: '借款', repayment: '還款',
   refund: '回注', transfer: '轉帳', settlement: '結算', opening: '初始金額',
-  group_summary: '小組彙整', reset: '歸零清算',
+  group_summary: '小組彙整', reset: '歸零清算', expense_claim: '代墊請款',
 };
 
 /** 畫面上的大類別 */
 export type FundCategory = '收入' | '支出' | '結算' | '轉帳';
 export const CATEGORY_OF: Record<FundTransactionType, FundCategory> = {
   donation: '收入', income: '收入', loan: '收入', refund: '收入',
-  expense: '支出', repayment: '支出',
+  expense: '支出', repayment: '支出', expense_claim: '支出',
   transfer: '轉帳',
   settlement: '結算', opening: '結算', group_summary: '結算', reset: '結算',
 };
@@ -44,7 +47,14 @@ export const CATEGORIES: FundCategory[] = ['收入', '支出', '結算', '轉帳
 export const SUBTYPE_LABEL: Record<FundTransactionType, string> = {
   donation: '奉納', income: '其他收入', loan: '借款', refund: '回注',
   expense: '支出', repayment: '還款', transfer: '轉帳',
-  settlement: '月結算', opening: '初始金額', group_summary: '小組彙整', reset: '歸零清算',
+  settlement: '月結算', opening: '初始金額', group_summary: '小組彙整', reset: '歸零清算', expense_claim: '代墊請款',
+};
+
+export type IncomeSource =
+  | 'donation' | 'salon' | 'event' | 'kitchen' | 'reinject' | 'loan' | 'refund' | 'interest' | 'inkind' | 'other';
+export const INCOME_SOURCE_LABEL: Record<IncomeSource, string> = {
+  donation: '奉納', salon: '沙龍營業', event: '活動', kitchen: '廚房隨喜', reinject: '專款回注',
+  loan: '借款', refund: '退款', interest: '利息', inkind: '帳外支援', other: '其他',
 };
 
 export interface FundLine {
@@ -68,6 +78,12 @@ export interface FundTransaction {
   amount: number;
   source: 'form' | 'admin' | 'import';
   created_at: string;
+  income_source: IncomeSource | null;
+  stated_on: string | null;
+  date_note: string | null;
+  off_ledger: boolean;
+  group_id: number | null;
+  decision_ref: string | null;
   fund_lines?: FundLine[];
 }
 
@@ -186,25 +202,50 @@ export const fmtAmount = (n: number) => (n < 0 ? `-${Math.abs(n).toLocaleString(
 
 // ================= 第二階段 =================
 
-export interface FundAdvancer { id: number; name: string; active: boolean; sort_order: number }
-export interface FundTag { id: number; name: string; group: 'space' | 'nature' | 'item'; active: boolean; sort_order: number }
+export interface FundAdvancer { id: number; name: string; active: boolean; sort_order: number; member_id: number | null }
+export type ReportGroup = '貸款與信用卡' | '交通與車輛' | '水電與通訊' | '中央蘭室配置';
+export interface FundTag {
+  id: number; name: string; group: 'space' | 'nature' | 'item'; active: boolean; sort_order: number;
+  report_group: ReportGroup | null;
+}
 export const TAG_GROUP_LABEL: Record<FundTag['group'], string> = { space: '空間', nature: '性質', item: '細項' };
 
 export interface FundTemplate {
   id: number; name: string; kind: 'expense' | 'tags'; vendor: string | null; description: string | null;
   tags: string[]; storage_name: string | null; advancer_name: string | null; default_amount: number | null;
-  active: boolean; sort_order: number;
+  active: boolean; sort_order: number; recurring: boolean; due_day: number | null;
 }
+
+export type ClaimStatus = 'none' | 'unclaimed' | 'claimed' | 'waived';
 
 export interface FundExpense {
   id: number; transaction_id: number; vendor: string | null; description: string | null;
   voucher_no: string | null; tags: string[]; advancer_id: number | null; settled: boolean;
+  claim_status: ClaimStatus; claimed_transaction_id: number | null; claimed_on: string | null;
 }
-export interface FundLoan { id: number; transaction_id: number; lender_name: string; principal: number; note: string | null }
+export interface FundLoan {
+  id: number; transaction_id: number | null; lender_name: string; principal: number; note: string | null;
+  lender_member_id: number | null; interest: number; due_on: string | null;
+  installment: number | null; installment_count: number | null;
+  status: 'open' | 'closed' | 'written_off'; started_on: string | null;
+}
 export interface FundRepayment { id: number; transaction_id: number; loan_id: number; amount: number; fee: number }
 export interface FundSettlement {
   id: number; transaction_id: number; month: string;
   actual_post: number | null; actual_cash: number | null; system_post: number | null; system_cash: number | null;
+  period_no: number; freeze_base: number | null; frozen_reserve: number; frozen_future: number;
+  zero_reason: string | null; late_days: number | null;
+}
+
+export interface FundPayable {
+  id: number; title: string; amount: number; due_on: string | null; account_id: number | null;
+  template_id: number | null; vendor: string | null; note: string | null;
+  status: 'open' | 'paid' | 'cancelled'; paid_transaction_id: number | null;
+  created_by: string | null; created_at: string;
+}
+export interface FundSetting { key: string; value: unknown; updated_at: string }
+export interface FundEmergency {
+  id: number; started_on: string; ended_on: string | null; note: string | null; declared_by: string | null;
 }
 
 export const FREEZE_RATE = 0.3; // 章程：結算後總餘款 30% 凍存緊急應變備用金、30% 凍存共存前瞻預算
