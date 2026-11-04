@@ -14,12 +14,46 @@ const check = <T>(label: string, res: { data: T | null; error: { message: string
   return res.data as T
 }
 
-/** Deletes every ledger row (transactions cascade to lines and sub-tables), payables, pre-ledger loans; clears joined_at. */
-export async function resetLedger(client: SupabaseClient) {
+/** Marker on every payable the importer writes; payables without it are live data. */
+export const IMPORT_PAYABLE_MARKER = '[import]'
+
+/** A payable written by the importer: marked, or a legacy import row (no note, no creator) from before the marker. */
+export const isImportPayable = (p: { note?: string | null; created_by?: string | null }) =>
+  (p.note ?? '').startsWith(IMPORT_PAYABLE_MARKER) || (p.note == null && p.created_by == null)
+
+export type LiveCounts = { transactions: number; payables: number }
+
+/** Rows not created by the importer: transactions with source ≠ 'import' and unmarked payables. */
+export async function countLiveRows(client: SupabaseClient): Promise<LiveCounts> {
+  const tx = await client.from('fund_transactions').select('id', { count: 'exact', head: true }).neq('source', 'import')
+  if (tx.error) throw new Error(`count live fund_transactions: ${tx.error.message}`)
+  const payables = check('select fund_payables', await client.from('fund_payables').select('id, note, created_by')) as Row[]
+  return { transactions: tx.count ?? 0, payables: payables.filter((p) => !isImportPayable(p as never)).length }
+}
+
+export class LiveDataError extends Error {
+  readonly counts: LiveCounts
+  constructor(counts: LiveCounts) {
+    super(`ledger holds live (non-import) rows: ${counts.transactions} fund_transactions, ${counts.payables} fund_payables; pass --wipe-live-data to delete them too`)
+    this.counts = counts
+  }
+}
+
+/**
+ * Deletes every ledger row (transactions cascade to lines and sub-tables), payables, pre-ledger loans.
+ * Refuses (LiveDataError) when live rows exist unless `wipeLiveData`. Clears joined_at only where it still
+ * equals the date the import derives (`joinedAt`), so dates set by hand survive.
+ */
+export async function resetLedger(client: SupabaseClient, opts: { joinedAt: Map<number, string>; wipeLiveData?: boolean }): Promise<LiveCounts> {
+  const live = await countLiveRows(client)
+  if ((live.transactions || live.payables) && !opts.wipeLiveData) throw new LiveDataError(live)
   check('delete fund_payables', await client.from('fund_payables').delete().gte('id', 0))
   check('delete fund_transactions', await client.from('fund_transactions').delete().gte('id', 0))
   check('delete pre-ledger fund_loans', await client.from('fund_loans').delete().is('transaction_id', null))
-  check('reset fund_members.joined_at', await client.from('fund_members').update({ joined_at: null }).gte('id', 0))
+  for (const [memberId, joined] of opts.joinedAt) {
+    check(`reset fund_members.joined_at ${memberId}`, await client.from('fund_members').update({ joined_at: null }).eq('id', memberId).eq('joined_at', joined))
+  }
+  return live
 }
 
 /** Applies an id remap (temporary negative id → real id) to refs and every planned line. */
@@ -34,6 +68,8 @@ export function remapPlan(plan: Plan, accountIds: Map<number, number>, storageId
   const txs = plan.txs.map((t) => ({ ...t, lines: t.lines.map((l) => ({ ...l, account_id: a(l.account_id), storage_id: s(l.storage_id) })) }))
   return { ...plan, refs, txs }
 }
+
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 
 function fail(msg: string): never {
   throw new Error(msg)
@@ -93,7 +129,12 @@ export async function writePlan(client: SupabaseClient, input: Plan): Promise<{ 
   // Pre-ledger loans (no transaction).
   const preLoans = new Map<string, number>()
   if (plan.preLoans.length) {
-    const rows = plan.preLoans.map((p) => ({ transaction_id: null, lender_name: p.lender, lender_member_id: p.lender_member_id, principal: p.principal, started_on: p.started_on, status: 'open' }))
+    const repaid = (lender: string) =>
+      sum(plan.txs.filter((t) => t.sub?.table === 'fund_repayments' && (t.sub.row.loan_ref as { pre_loan?: string } | undefined)?.pre_loan === lender).map((t) => Number(t.sub!.row.amount)))
+    const rows = plan.preLoans.map((p) => ({
+      transaction_id: null, lender_name: p.lender, lender_member_id: p.lender_member_id, principal: p.principal, started_on: p.started_on,
+      status: p.principal === repaid(p.lender) ? 'closed' : 'open',
+    }))
     const data = check('insert pre-ledger fund_loans', await client.from('fund_loans').insert(rows).select('id, lender_name')) as Row[]
     for (const d of data) preLoans.set(d.lender_name as string, d.id as number)
   }
@@ -128,7 +169,7 @@ export async function writePlan(client: SupabaseClient, input: Plan): Promise<{ 
   }
 
   if (plan.payables.length) {
-    check('insert fund_payables', await client.from('fund_payables').insert(plan.payables.map((p) => ({ ...p, status: 'open' }))))
+    check('insert fund_payables', await client.from('fund_payables').insert(plan.payables.map((p) => ({ ...p, note: IMPORT_PAYABLE_MARKER, status: 'open' }))))
   }
 
   for (const [memberId, joined] of joinedAt(plan)) {

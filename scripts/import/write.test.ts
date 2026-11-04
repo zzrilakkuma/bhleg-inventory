@@ -2,12 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Plan, PlannedTx } from './plan.ts'
-import { joinedAt, remapPlan, resolveLoanRef, verifyImport, writePlan } from './write.ts'
+import { isImportPayable, joinedAt, LiveDataError, remapPlan, resetLedger, resolveLoanRef, verifyImport, writePlan } from './write.ts'
 
 type Call = { table: string; op: string; rows?: Record<string, unknown>[]; patch?: Record<string, unknown>; filters: [string, unknown][] }
 
-/** Minimal PostgREST stand-in: assigns ids per table and records every call. */
-function fakeClient() {
+/** Minimal PostgREST stand-in: assigns ids per table and records every call; `seed` rows answer plain selects. */
+function fakeClient(seed: Record<string, Record<string, unknown>[]> = {}) {
   const calls: Call[] = []
   const nextId: Record<string, number> = {}
   const client = {
@@ -15,6 +15,7 @@ function fakeClient() {
       const call: Call = { table, op: '', filters: [] }
       let result: unknown = null
       let single = false
+      let countMode = false
       const b = {
         insert(rows: Record<string, unknown> | Record<string, unknown>[]) {
           const list = (Array.isArray(rows) ? rows : [rows]).map((r) => ({ ...r }))
@@ -34,7 +35,12 @@ function fakeClient() {
           calls.push(call)
           return b
         },
-        select() {
+        select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+          if (!call.op) {
+            Object.assign(call, { op: 'select' })
+            calls.push(call)
+            countMode = !!opts?.count
+          }
           return b
         },
         single() {
@@ -44,7 +50,15 @@ function fakeClient() {
         eq(c: string, v: unknown) { call.filters.push([`eq.${c}`, v]); return b },
         is(c: string, v: unknown) { call.filters.push([`is.${c}`, v]); return b },
         gte(c: string, v: unknown) { call.filters.push([`gte.${c}`, v]); return b },
+        neq(c: string, v: unknown) { call.filters.push([`neq.${c}`, v]); return b },
         then(res: (v: unknown) => void) {
+          if (call.op === 'select') {
+            const rows = (seed[table] ?? []).filter((r) => call.filters.every(([f, v]) => {
+              const [op, col] = f.split('.')
+              return op === 'neq' ? r[col] !== v : op === 'eq' ? r[col] === v : true
+            }))
+            return res(countMode ? { data: null, count: rows.length, error: null } : { data: rows, error: null })
+          }
           const data = single && Array.isArray(result) ? result[0] : result
           res({ data, error: null })
         },
@@ -97,16 +111,18 @@ test('writePlan: creates missing refs, remaps lines, links loans and pre-loans, 
       sub: { table: 'fund_loans', row: { lender_name: 'A', principal: 100 } } }),
     tx({ importRow: -50, type: 'repayment', amount: -10, sub: { table: 'fund_repayments', row: { loan_id: null, amount: 10, fee: 0, loan_ref: { import_row: 4 } } } }),
     tx({ importRow: -51, type: 'repayment', amount: -20, sub: { table: 'fund_repayments', row: { loan_id: null, amount: 20, fee: 0, loan_ref: { pre_loan: 'Eason' } } } }),
+    tx({ importRow: -52, type: 'repayment', amount: -100000, sub: { table: 'fund_repayments', row: { loan_id: null, amount: 99980, fee: 0, loan_ref: { pre_loan: 'Eason' } } } }),
+    tx({ importRow: -53, type: 'repayment', amount: -5, sub: { table: 'fund_repayments', row: { loan_id: null, amount: 5, fee: 0, loan_ref: { pre_loan: 'Ruby' } } } }),
     tx({ importRow: 6, occurredOn: '2024-11-08', amount: -3, sub: { table: 'fund_expenses', row: { claim_status: 'claimed' } } }),
     tx({ importRow: 7, type: 'donation', occurredOn: '2024-11-01', sub: { table: 'fund_donations', row: { member_id: 9, months: ['2024-11'] } } }),
   ]
   const plan = basePlan(txs, {
-    preLoans: [{ lender: 'Eason', principal: 100000, started_on: '2024-11-01', lender_member_id: 15 }],
+    preLoans: [{ lender: 'Eason', principal: 100000, started_on: '2024-11-01', lender_member_id: 15 }, { lender: 'Ruby', principal: 20, started_on: '2024-11-01', lender_member_id: 3 }],
     payables: [{ title: 'p', amount: 1, due_on: null, vendor: null }],
   })
   const { client, calls } = fakeClient()
   const { inserted, plan: written } = await writePlan(client, plan)
-  assert.equal(inserted, 7)
+  assert.equal(inserted, 9)
   const ins = (table: string) => calls.filter((c) => c.table === table && c.op === 'insert').flatMap((c) => c.rows!)
 
   assert.deepEqual(ins('fund_storages').map((r) => [r.name, r.active, r.id]), [['新袋', false, 801]])
@@ -121,15 +137,17 @@ test('writePlan: creates missing refs, remaps lines, links loans and pre-loans, 
 
   const preLoan = ins('fund_loans').find((r) => r.transaction_id === null)!
   assert.deepEqual([preLoan.lender_name, preLoan.principal, preLoan.lender_member_id], ['Eason', 100000, 15])
+  // fully repaid pre-loan is closed; partially repaid stays open
+  assert.deepEqual(ins('fund_loans').filter((r) => r.transaction_id === null).map((r) => [r.lender_name, r.status]), [['Eason', 'closed'], ['Ruby', 'open']])
   const loan = ins('fund_loans').find((r) => r.transaction_id === idOf(4))!
   const reps = ins('fund_repayments')
-  assert.deepEqual(reps.map((r) => [r.transaction_id, r.loan_id, 'loan_ref' in r]), [[idOf(-50), loan.id, false], [idOf(-51), preLoan.id, false]])
+  assert.deepEqual(reps.slice(0, 2).map((r) => [r.transaction_id, r.loan_id, 'loan_ref' in r]), [[idOf(-50), loan.id, false], [idOf(-51), preLoan.id, false]])
   // the loan row is inserted before the repayment that references it
   assert.ok(calls.findIndex((c) => c.table === 'fund_loans' && c.rows![0].transaction_id !== null) < calls.findIndex((c) => c.table === 'fund_repayments'))
 
   const exp = ins('fund_expenses')[0]
   assert.deepEqual([exp.claimed_transaction_id, exp.claimed_on], [idOf(6), '2024-11-08'])
-  assert.deepEqual(ins('fund_payables').map((r) => r.status), ['open'])
+  assert.deepEqual(ins('fund_payables').map((r) => [r.status, r.note]), [['open', '[import]']])
   const upd = calls.filter((c) => c.table === 'fund_members' && c.op === 'update')
   assert.deepEqual(upd.map((c) => [c.patch!.joined_at, c.filters]), [['2024-11-01', [['eq.id', 9], ['is.joined_at', null]]]])
 })
@@ -161,4 +179,35 @@ test('verifyImport compares running balances with checkpoints', () => {
   const bad = verifyImport(db(6), plan)
   assert.equal(bad.ok, false)
   assert.match((bad as { message: string }).message, /row 3: 不凍結零用金 csv 15 db 16/)
+})
+
+test('isImportPayable: marker or legacy import row (no note, no creator)', () => {
+  assert.equal(isImportPayable({ note: '[import]', created_by: null }), true)
+  assert.equal(isImportPayable({ note: null, created_by: null }), true)
+  assert.equal(isImportPayable({ note: null, created_by: 'u1' }), false)
+  assert.equal(isImportPayable({ note: '房租', created_by: null }), false)
+})
+
+test('resetLedger refuses (before deleting) when live rows exist, unless wipeLiveData', async () => {
+  const seed = {
+    fund_transactions: [{ id: 1, source: 'import' }, { id: 2, source: 'admin' }, { id: 3, source: 'admin' }],
+    fund_payables: [{ id: 1, note: '[import]', created_by: null }, { id: 2, note: null, created_by: null }, { id: 3, note: '房租', created_by: 'u' }],
+  }
+  const { client, calls } = fakeClient(seed)
+  const err = await resetLedger(client, { joinedAt: new Map() }).catch((e) => e)
+  assert.ok(err instanceof LiveDataError)
+  assert.deepEqual(err.counts, { transactions: 2, payables: 1 })
+  assert.equal(calls.filter((c) => c.op === 'delete' || c.op === 'update').length, 0)
+
+  const wipe = fakeClient(seed)
+  assert.deepEqual(await resetLedger(wipe.client, { joinedAt: new Map(), wipeLiveData: true }), { transactions: 2, payables: 1 })
+  assert.deepEqual(wipe.calls.filter((c) => c.op === 'delete').map((c) => c.table), ['fund_payables', 'fund_transactions', 'fund_loans'])
+})
+
+test('resetLedger with only import rows deletes and clears joined_at only where it equals the imported date', async () => {
+  const { client, calls } = fakeClient({ fund_transactions: [{ id: 1, source: 'import' }], fund_payables: [{ id: 1, note: '[import]', created_by: null }] })
+  assert.deepEqual(await resetLedger(client, { joinedAt: new Map([[9, '2024-11-01']]) }), { transactions: 0, payables: 0 })
+  assert.deepEqual(calls.filter((c) => c.op === 'delete').map((c) => c.table), ['fund_payables', 'fund_transactions', 'fund_loans'])
+  const upd = calls.filter((c) => c.table === 'fund_members' && c.op === 'update')
+  assert.deepEqual(upd.map((c) => [c.patch, c.filters]), [[{ joined_at: null }, [['eq.id', 9], ['eq.joined_at', '2024-11-01']]]])
 })

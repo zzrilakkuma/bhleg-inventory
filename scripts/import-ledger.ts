@@ -1,21 +1,23 @@
 // 匯入總表流水帳。
-// 用法：node --experimental-strip-types --env-file=.env.local scripts/import-ledger.ts (--dry-run | --reset) [--csv=PATH] [--until=ROW] [--allow-fix]
-//   --dry-run  只規劃、印出摘要，不寫入。
-//   --reset    刪除全部流水帳（交易、應付、帳前借款）後重新匯入，並以 CSV 快照逐列驗證。
+// 用法：node --experimental-strip-types --env-file=.env.local scripts/import-ledger.ts (--dry-run | --reset [--wipe-live-data]) [--csv=PATH] [--until=ROW] [--allow-fix]
+//   --dry-run         只規劃、印出摘要，不寫入。
+//   --reset           刪除全部流水帳（交易、應付、帳前借款）後重新匯入，並以 CSV 快照逐列驗證。
+//                     若資料庫已有非匯入資料（source ≠ 'import' 的交易、未標 [import] 的應付）則拒絕（exit 2）。
+//   --wipe-live-data  搭配 --reset：連非匯入資料一併刪除。
 import { readFileSync } from 'node:fs'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { fetchAllTransactions } from '../lib/fund-db.ts'
+import { fetchAllTransactions } from '../lib/fund-fetch.ts'
 import { parseCsv } from './import/csv.ts'
 import { toRawRows } from './import/normalize.ts'
 import { planImport, type Plan, type PlanRefs } from './import/plan.ts'
-import { resetLedger, verifyImport, writePlan } from './import/write.ts'
+import { joinedAt, LiveDataError, resetLedger, verifyImport, writePlan } from './import/write.ts'
 
 const DEFAULT_CSV = '巢穴參考資料/巢穴共同體 公基金計畫 流水帳 - 總表.csv'
 
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3)
 const flag = (name: string) => process.argv.includes(`--${name}`)
 
-const USAGE = 'usage: import-ledger.ts (--dry-run | --reset) [--csv=PATH] [--until=ROW] [--allow-fix]'
+const USAGE = 'usage: import-ledger.ts (--dry-run | --reset [--wipe-live-data]) [--csv=PATH] [--until=ROW] [--allow-fix]'
 
 const serviceClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
@@ -121,7 +123,14 @@ async function main() {
     count(s, 'fund_loans', { isNull: 'transaction_id' }),
   ])
   console.log(`reset: deleting ${txCount} fund_transactions, ${payableCount} fund_payables, ${preLoanCount} pre-ledger fund_loans`)
-  await resetLedger(s)
+  try {
+    const live = await resetLedger(s, { joinedAt: joinedAt(plan), wipeLiveData: flag('wipe-live-data') })
+    if (live.transactions || live.payables) console.log(`reset: --wipe-live-data deleted ${live.transactions} live fund_transactions, ${live.payables} live fund_payables`)
+  } catch (e) {
+    if (!(e instanceof LiveDataError)) throw e
+    console.error(`ABORT before deleting: 已有非匯入資料 ${e.counts.transactions} 筆 fund_transactions（source ≠ 'import'）、${e.counts.payables} 筆 fund_payables（未標 [import]）；確定要一併刪除請加 --wipe-live-data。`)
+    process.exit(2)
+  }
   const { inserted, plan: written } = await writePlan(s, plan)
   console.log(`inserted ${inserted}`)
 

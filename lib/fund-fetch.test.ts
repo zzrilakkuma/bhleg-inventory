@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchAllTransactions } from './fund-db.ts';
+import { fetchAllTransactions } from './fund-fetch.ts';
 
 const makeClient = (total: number) => {
   const rows = Array.from({ length: total }, (_, i) => ({ id: i + 1, fund_lines: [] }));

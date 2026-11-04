@@ -78,9 +78,9 @@
 ### 5.4 匯入（`scripts/import-ledger.ts`，一次性）
 - 執行前 `--reset` 刪除所有交易與子表（含【測試資料】與任何已登錄交易，使用者決定），保留成員、科目、存放、經手人、代墊者、標籤、模板。
 - 六段：parse（RFC4180、BOM）→ normalize（日期、多金額 token、hashtag → 存放／代墊／內嵌轉帳、快照解析＋別名）→ classify（型別與 income_source）→ reconcile（以快照差為準，Δ→lines 解算器；不符即中止）→ write（`seq=import_row`、`occurred_on` 單調化、原日期存 `stated_on`、子表）→ verify（重讀全部跑 `computeRunningBalances` 逐列 diff）。
-- 代墊 Δ=0 的 4 列 → `off_ledger/unclaimed`；Δ≠0 的 118 列 → `claimed`；放棄請款 4 列 → `waived`。
+- 代墊 Δ=0 的 1 列（列 544）→ `off_ledger/unclaimed`；Δ≠0 的 107 列 → `claimed`；放棄請款／無須支付 6 列（471–473、707、798、799）→ `waived`（金額記被放棄的費用，不產生 lines）。
 - 非成員奉納者不建成員，記 `income/event`。缺的科目／存放建立後停用。
-- 驗收：末列小結與總表一致（列 885 的 4,165，末兩列無快照）、24 筆結算、凍存 0 的 7 筆有 `zero_reason`、重跑不重複。
+- 驗收：末列小結 = 1,627（末兩列 892–893 進 `fund_payables`，列 885 為驗證終點）、24 筆結算、凍存 0 的 7 筆有 `zero_reason`、重跑不重複。
 
 ### 5.5 公基金 V2 的 UI（使用者決定：原「公基金 流水帳」`/fund/*` 保留不動，V2 另開新路徑與首頁入口）
 
@@ -113,9 +113,9 @@
 
 ### 5.7 Builder check 後補上的決定
 
-1. **總表末兩列（892–893）**：9 月電費 −22,239 與 10 月電信費 −929 是尚未繳納的帳單（日期只有「2026/11/」、無快照）。匯成 `fund_payables`（open，due_on 依備註 11/24），不建交易。reconcile/verify 的終點是列 885，匯入後小結 = 4,165，上線第一天的應付未付 = 23,168。
+1. **總表末兩列（892–893）**：9 月電費 −22,239 與 10 月電信費 −929 是尚未繳納的帳單（日期只有「2026/11/」、無快照）。匯成 `fund_payables`（open，due_on 依備註 11/24），不建交易。reconcile/verify 的終點是列 885，匯入後小結 = 1,627，上線第一天的應付未付 = 23,168。
 2. **歸零清算（列 405–425）**：列 405 建 `reset` 交易，其 lines 為處理完列 406–424 後所有科目／存放餘額的負值，`seq` 排在 424 之後；列 425 `opening` 建二階起始 lines（郵局 9,800、現金 831 等）。列 406–424 的「剩餘：N元」是現金備忘，不是快照，跳過驗證，累積到列 425 一次驗為全零再加 opening。`reset`／`opening`／`settlement` 屬「結算」類，統計的收入／支出分類一律排除。
-3. **代墊入帳日期（我的決定）**：請款時另開一筆 `type='expense_claim'`（顯示為「代墊請款」）交易，日期＝請款日，lines 在這筆上；原支出交易保持 `off_ledger=true`，`claimed_transaction_id` 指向請款交易。不回溯改已公布月份。匯入的 118 列當場扣款者 `claimed_transaction_id` 指向自身、lines 在自身。現有「代墊（待清償）」存放位置與 `advance_settle` 表單退場，由新流程取代。
+3. **代墊入帳日期（我的決定）**：請款時另開一筆 `type='expense_claim'`（顯示為「代墊請款」）交易，日期＝請款日，lines 在這筆上；原支出交易保持 `off_ledger=true`，`claimed_transaction_id` 指向請款交易。不回溯改已公布月份。匯入的 107 列當場扣款者 `claimed_transaction_id` 指向自身、lines 在自身。現有「代墊（待清償）」存放位置與 `advance_settle` 表單退場，由新流程取代。
 4. **統計的「月」＝結算期間（使用者決定）**：上一次結算列（含）之後到這一次結算列（含）為一期，以 `fund_settlements.month`＋`period_no` 命名；view 以 `(occurred_on, seq, id)` 的順序切期，不用日曆月。`stated_on` 只做顯示。
 5. **帳前借款（使用者決定：照總表反推）**：對每個出借人，本金＝總表已還本金合計＋最後一次結算備註「剩餘 N 元」；起始日標為 2024-11-05 之前（`occurred_on` 設 2024-11-01，`transaction_id=null`，note 註明反推）。匯入後列出清單供會計校對。
 6. **帳號與角色（使用者決定）**：參與者沿用現有登入（物資系統同一套帳號，`profiles`）；`fund_roles` 以 seed SQL 先寫入 Steven 與 Eason 為 `accountant`，之後由會計在管理頁增減。物資流表的 RLS 不在本設計範圍。

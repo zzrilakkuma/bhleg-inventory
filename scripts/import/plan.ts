@@ -431,6 +431,10 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
       }
     }
 
+    // Waived rows carry no lines; their amount is the cost that was waived (the negative tokens), even when an
+    // in-kind donation token cancels it in the cell (`-46499 … +46499（Betty奉納）`). The donor stays in the note.
+    if (waived) base.amount = sum(amounts.filter((a) => a.amount < 0).map((a) => a.amount))
+
     // Sub-tables.
     const voucherAndNote = `${r.voucher}\n${r.note}`
     if (cls.type === 'donation') {

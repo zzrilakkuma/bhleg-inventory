@@ -410,3 +410,22 @@ test('expense tag alias 初一十五拜拜用品 → 拜拜用品', () => {
   ], r)
   assert.deepEqual(p.txs[1].sub!.row.tags, ['巢穴', '拜拜用品'])
 })
+
+test('real row 707 (#無須支付, in-kind donation cancels the cost): amount = waived cost, no lines, donor in note', () => {
+  const s = snap({ 不凍結零用金: 1000, 郵局: 1000 })
+  const p = planImport([
+    opening({ 不凍結零用金: 1000, 郵局: 1000 }, '1000'),
+    mk({
+      row: 707, kind: '支出', date: '2025/9/1', title: '【共用汽車】\n停車費', snapshotCell: s,
+      amountCell: '-12445\n-6180\n-3013\n-11230\n-600\n-300\n-1200\n-1531\n-10000\n+46499（Betty奉納）',
+      note: '#巢穴共同體經常性基本開銷\n#共用汽車 #停車費 \n#無須支付\n#該費用由巢穴人Betty全數奉納全額繳清',
+    }),
+  ].map((r, i) => (i === 0 ? { ...r, row: 706 } : r)), refs)
+  assert.deepEqual(p.mismatches, [])
+  const t = p.txs.find((x) => x.importRow === 707)!
+  assert.equal(t.amount, -46499)
+  assert.deepEqual(t.lines, [])
+  assert.equal(t.offLedger, true)
+  assert.equal(t.sub!.row.claim_status, 'waived')
+  assert.match(t.note!, /Betty全數奉納/)
+})
