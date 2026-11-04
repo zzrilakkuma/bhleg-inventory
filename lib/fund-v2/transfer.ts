@@ -4,65 +4,82 @@ import type { NewTransaction, NewLine } from '../fund-db.ts';
 import type { Refs, Snapshot } from './api.ts';
 
 export interface Slot {
-  accountId: number; storageId: number; label: string; balance: number;
-  kind: 'main' | 'reserve' | 'group' | 'special';
+  kind: 'storage' | 'account'; id: number; label: string; balance: number;
+  accountKind?: 'main' | 'reserve' | 'group' | 'special';
 }
 
 const isPending = (name: string) => /待清償/.test(name);
 const isBag = (name: string) => name.startsWith('現金（');
 
 /**
- * 可轉帳的位置。
- * main：郵局、現金各一格，加上餘額≠0 的其他存放（排除待清償、小組現金袋）。
- *   快照沒有 (科目, 存放) 餘額，故 main 的格子餘額 = 該存放總額 − 預設存放在該處的非 main 科目餘額之和（近似）。
- * reserve／group／special：餘額≠0 或 active 者，在其預設存放一格，餘額 = 科目餘額。
+ * 可轉帳的 chip，兩種：
+ * - 存放：郵局、現金、餘額≠0 的小組現金袋（不含待清償）；餘額 = 快照的存放總額。
+ * - 科目：active 的 reserve／group／special（加上餘額≠0 的停用者）；餘額 = 快照的科目總額。
+ * （快照沒有 (科目, 存放) 逐格餘額，故不以那個粒度建模。）
  */
 export const slotsFrom = (snapshot: Snapshot | null, refs: Pick<Refs, 'accounts' | 'storages'>): Slot[] => {
-  const main = refs.accounts.find((a) => a.kind === 'main');
-  const others = refs.accounts.filter((a) => a.kind !== 'main');
-  const accBal = (id: number) => snapshot?.accounts[id] ?? 0;
-  const stBal = (id: number) => snapshot?.storages[id] ?? 0;
   const out: Slot[] = [];
-  if (main) {
-    for (const s of refs.storages) {
-      if (isPending(s.name) || isBag(s.name)) continue;
-      const core = s.name === '郵局' || s.name === '現金';
-      if (core ? !s.active : stBal(s.id) === 0) continue;
-      const share = others.filter((a) => a.default_storage_id === s.id).reduce((t, a) => t + accBal(a.id), 0);
-      out.push({ accountId: main.id, storageId: s.id, label: s.name, balance: stBal(s.id) - share, kind: 'main' });
-    }
+  for (const s of refs.storages) {
+    if (isPending(s.name)) continue;
+    const bal = snapshot?.storages[s.id] ?? 0;
+    const core = s.name === '郵局' || s.name === '現金';
+    if (core ? !s.active : !(isBag(s.name) && bal !== 0)) continue;
+    out.push({ kind: 'storage', id: s.id, label: s.name, balance: bal });
   }
-  for (const a of others) {
-    if (isPending(a.name) || a.default_storage_id == null) continue;
-    const dst = refs.storages.find((s) => s.id === a.default_storage_id);
-    if (dst && isPending(dst.name)) continue;
-    if (accBal(a.id) === 0 && !a.active) continue;
-    out.push({ accountId: a.id, storageId: a.default_storage_id, label: a.name, balance: accBal(a.id), kind: a.kind as Slot['kind'] });
+  for (const a of refs.accounts) {
+    if (a.kind === 'main' || isPending(a.name)) continue;
+    const bal = snapshot?.accounts[a.id] ?? 0;
+    if (!a.active && bal === 0) continue;
+    out.push({ kind: 'account', id: a.id, label: a.name, balance: bal, accountKind: a.kind });
   }
   return out;
 };
 
+const sameSlot = (a: Slot, b: Slot) => a.kind === b.kind && a.id === b.id;
+
 export const buildTransferWrite = (
-  from: Slot, to: Slot, amount: number, date: string, decisionRef?: string, seq?: number,
+  from: Slot, to: Slot, amount: number, date: string, refs: Pick<Refs, 'accounts' | 'storages'>,
+  decisionRef?: string, seq?: number,
 ): { tx: NewTransaction; lines: NewLine[] } => {
+  const main = refs.accounts.find((a) => a.kind === 'main');
+  if (!main) throw new Error('找不到主科目');
+  const postId = refs.storages.find((s) => s.name === '郵局')?.id;
+  const defSt = (accId: number) => {
+    const d = refs.accounts.find((a) => a.id === accId)?.default_storage_id ?? postId;
+    if (d == null) throw new Error('找不到存放位置');
+    return d;
+  };
+  let a: NewLine; let b: NewLine;
+  if (from.kind === 'storage' && to.kind === 'storage') {
+    a = { account_id: main.id, storage_id: from.id, amount: -amount };
+    b = { account_id: main.id, storage_id: to.id, amount };
+  } else if (from.kind === 'account' && to.kind === 'account') {
+    a = { account_id: from.id, storage_id: defSt(from.id), amount: -amount };
+    b = { account_id: to.id, storage_id: defSt(to.id), amount };
+  } else if (from.kind === 'storage') {
+    a = { account_id: main.id, storage_id: from.id, amount: -amount };
+    b = { account_id: to.id, storage_id: from.id, amount };
+  } else {
+    a = { account_id: from.id, storage_id: to.id, amount: -amount };
+    b = { account_id: main.id, storage_id: to.id, amount };
+  }
   const t = buildTransferTexts({ fromName: from.label, toName: to.label, amount });
   return {
     tx: {
       type: 'transfer', occurred_on: date, amount: 0, seq, title: t.title, voucher: t.voucher, note: t.note,
       decision_ref: decisionRef?.trim() ? decisionRef.trim() : null,
     },
-    lines: [
-      { account_id: from.accountId, storage_id: from.storageId, amount: -amount },
-      { account_id: to.accountId, storage_id: to.storageId, amount },
-    ],
+    lines: [a, b],
   };
 };
 
 export const validateTransfer = (from: Slot, to: Slot, amount: number, decisionRef: string): string | null => {
   if (!(amount > 0)) return '金額必須大於 0';
-  if (from.accountId === to.accountId && from.storageId === to.storageId) return '來源與目的相同';
+  if (sameSlot(from, to)) return '來源與目的相同';
   if (amount > from.balance) return '來源餘額不足';
-  if (from.kind === 'reserve' && !decisionRef.trim()) return '從緊急應變／前瞻搬出需填依據（第幾次會議）';
+  if (from.kind === 'account' && from.accountKind === 'reserve' && !decisionRef.trim()) {
+    return '從緊急應變／前瞻搬出需填依據（第幾次會議）';
+  }
   return null;
 };
 

@@ -15,7 +15,7 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const inputCls = 'w-full bg-black border border-[#333333] rounded px-3 py-2 text-white text-base focus:border-[#00FF41] outline-none';
-const keyOf = (s: { accountId: number; storageId: number }) => `${s.accountId}/${s.storageId}`;
+const keyOf = (s: { kind: string; id: number }) => `${s.kind}:${s.id}`;
 
 export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; snapshot: Snapshot | null; onSaved: () => void }) {
   const slots = useMemo(() => slotsFrom(snapshot, refs), [snapshot, refs]);
@@ -28,14 +28,14 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
   const from = slots.find((s) => keyOf(s) === fromKey);
   const to = slots.find((s) => keyOf(s) === toKey);
   const amt = Number(amount);
-  const needRef = from?.kind === 'reserve';
+  const needRef = from?.kind === 'account' && from.accountKind === 'reserve';
 
   // 選了相同的位置就清掉「到」
   useEffect(() => { if (fromKey && fromKey === toKey) setToKey(null); }, [fromKey, toKey]);
 
   const error = from && to && amt > 0 ? validateTransfer(from, to, amt, ref) : null;
   const ready = !!from && !!to && amt > 0 && !error;
-  const write = ready ? buildTransferWrite(from!, to!, amt, today(), ref) : null;
+  const write = ready ? buildTransferWrite(from!, to!, amt, today(), refs, ref) : null;
   const preview = write ? afterTransfer(snapshot, write, refs) : null;
   const mainChanged = !!preview && preview.some((p) => p.label === refs.accounts.find((a) => a.kind === 'main')?.name);
   const shown = preview?.filter((p) => !(mainChanged && p.label === refs.accounts.find((a) => a.kind === 'main')?.name)) ?? [];
@@ -49,7 +49,7 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
       const { data, error: e } = await supabase.from('fund_transactions').select('occurred_on, seq').eq('occurred_on', date);
       if (e) throw e;
       const seq = nextSeq((data ?? []) as { occurred_on: string; seq: number }[], date);
-      const w = buildTransferWrite(from, to, amt, date, ref, seq);
+      const w = buildTransferWrite(from, to, amt, date, refs, ref, seq);
       await insertTransaction(w.tx, w.lines);
       toast.success('已記下');
       setFromKey(null); setToKey(null); setAmount(''); setRef('');
