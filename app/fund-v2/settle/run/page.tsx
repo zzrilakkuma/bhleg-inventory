@@ -105,12 +105,19 @@ function Wizard() {
   const act = actual ?? { post: String(system.post), cash: String(system.cash) };
   const actualN = { post: Number(act.post) || 0, cash: Number(act.cash) || 0 };
 
-  const preview = useMemo(() => {
+  const previewResult = useMemo((): { snap: Snapshot } | { error: string } | null => {
     if (!refs || !snap) return null;
-    try { return applyLines(snap, settlementLines({ freeze, system, actual: actualN, refs }), refs); }
-    catch { return null; }
+    try { return { snap: applyLines(snap, settlementLines({ freeze, system, actual: actualN, refs }), refs) }; }
+    catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refs, snap, freeze.reserve, freeze.future, system.post, system.cash, actualN.post, actualN.cash]);
+  const preview = previewResult && 'snap' in previewResult ? previewResult.snap : null;
+  const previewError = previewResult && 'error' in previewResult ? previewResult.error : null;
+
+  // 結算日不得早於帳上最後一筆交易，避免插在帳本中間
+  const minDate = snap?.occurred_on ?? '';
+  const dateTooEarly = !!minDate && date < minDate;
+  const earlyMsg = `結算日不能早於最後一筆交易（${minDate ? md(minDate) : ''}）`;
 
   // ---- 第 1 步寫入 ----
   const submitStep1 = async () => {
@@ -122,6 +129,7 @@ function Wizard() {
     const repayInput = loans.map((l) => ({ loan: l, amount: Number(repay[l.loan_id]?.amount) || 0, fee: Number(repay[l.loan_id]?.fee) || 0 }));
     if (repayInput.some((r) => r.amount > r.loan.remaining)) { toast.error('還款超過剩餘'); return; }
     if (!selected.length && !repayInput.some((r) => r.amount > 0)) { setStep(2); return; }
+    if (dateTooEarly) { toast.error(earlyMsg); return; }
 
     setBusy(true);
     const done: Step1Written = { claim: null, repayments: [] };
@@ -167,6 +175,7 @@ function Wizard() {
   // ---- 第 4 步：完成結算 ----
   const finish = async () => {
     if (!refs || !snap) return;
+    if (dateTooEarly) { toast.error(earlyMsg); return; }
     setBusy(true);
     try {
       const [seq, periods] = await Promise.all([seqFor(date), getPeriods(supabase)]);
@@ -194,7 +203,7 @@ function Wizard() {
       <div className="text-sm text-gray-400 mt-1 flex flex-wrap items-center gap-x-1">
         <span>結算日</span>
         {editDate && !written ? (
-          <input type="date" value={date} autoFocus
+          <input type="date" value={date} autoFocus min={minDate || undefined}
             onChange={(e) => setDate(e.target.value || todayISO())} onBlur={() => setEditDate(false)}
             className="bg-black border border-[#333333] rounded px-2 py-1 text-white text-sm" />
         ) : (
@@ -205,6 +214,7 @@ function Wizard() {
         )}
         <span>（章程 {dueDay} 日{late > 0 ? `，延後 ${late} 天` : ''}）</span>
       </div>
+      {dateTooEarly && <p className="text-[#FF0055] text-xs mt-1">{earlyMsg}</p>}
 
       <div className="mt-4 mb-5">
         <div className="flex gap-1">
@@ -238,6 +248,13 @@ function Wizard() {
           onFuture={(v) => setFreezeEdit((f) => ({ reserve: f?.reserve ?? String(charter.reserve), future: v }))}
           zeroReason={zeroReason} onZeroReason={setZeroReason}
           onBack={() => setStep(1)} onNext={() => setStep(3)} />
+      )}
+      {refs && step === 3 && previewError && (
+        <div>
+          <p className="text-[#FF0055] text-sm">無法產生預覽：{previewError}</p>
+          <button type="button" onClick={() => setStep(2)}
+            className="w-full sm:w-auto mt-4 px-6 py-3 rounded border border-[#333333] text-gray-300">上一步</button>
+        </div>
       )}
       {refs && step === 3 && preview && (
         <ReconcileStep systemPost={system.post} systemCash={system.cash} actualPost={act.post} actualCash={act.cash}

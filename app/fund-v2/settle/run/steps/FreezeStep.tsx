@@ -18,7 +18,7 @@ export default function FreezeStep({
   const isNone = zero && !isCharter;
   const charterTotal = Math.floor(Math.max(0, total) * rate);
   const pct = Math.round(rate * 100);
-  const over = r + f > main;
+  const over = r + f > 0 && r + f > main;
   const ok = !zero || zeroReason.trim() !== '';
 
   return (

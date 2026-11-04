@@ -1,6 +1,7 @@
 // 登入後的後台寫入：交易 + 明細 + 子表，失敗時回滾主交易（cascade 刪除子資料）
 import { supabase } from './supabase-client.ts';
 import type { FundTransactionType, IncomeSource } from './fund.ts';
+import { insertTransactionWith } from './fund-insert.ts';
 
 export interface NewLine { account_id: number; storage_id: number; amount: number; label?: string | null }
 
@@ -20,36 +21,11 @@ export interface NewTransaction {
   decision_ref?: string | null;
 }
 
-export const insertTransaction = async (
+export const insertTransaction = (
   tx: NewTransaction,
   lines: NewLine[],
   sub?: { table: string; row: Record<string, unknown> },
-): Promise<{ id: number }> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data, error } = await supabase
-    .from('fund_transactions')
-    .insert({ ...tx, source: 'admin', created_by: user?.id ?? null })
-    .select('id')
-    .single();
-  if (error || !data) throw new Error(error?.message ?? '寫入失敗');
-  const id = data.id as number;
-
-  const rollback = async (msg: string) => {
-    await supabase.from('fund_transactions').delete().eq('id', id);
-    throw new Error(msg);
-  };
-
-  const { error: lErr } = await supabase
-    .from('fund_lines')
-    .insert(lines.filter((l) => l.amount !== 0).map((l) => ({ ...l, transaction_id: id })));
-  if (lErr) await rollback(lErr.message);
-
-  if (sub) {
-    const { error: sErr } = await supabase.from(sub.table).insert({ ...sub.row, transaction_id: id });
-    if (sErr) await rollback(sErr.message);
-  }
-  return { id };
-};
+): Promise<{ id: number }> => insertTransactionWith(supabase, tx, lines, sub);
 
 export const deleteTransaction = async (id: number) => {
   const { error } = await supabase.from('fund_transactions').delete().eq('id', id);
