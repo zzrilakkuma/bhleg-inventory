@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
-import { deleteTransaction, updateTransaction, adjustTotal } from '@/lib/fund-db';
+import { fetchAllTransactions, deleteTransaction, updateTransaction, adjustTotal } from '@/lib/fund-db';
 import { FundNav, BalanceCard, inputCls, chipCls } from './ui';
 import {
   CATEGORY_OF, CATEGORIES, SUBTYPE_LABEL, computeRunningBalances, formatSnapshot, fmtAmount,
@@ -67,7 +67,7 @@ export default function FundPage() {
 
   const load = async () => {
     const [tx, ac, st] = await Promise.all([
-      supabase.from('fund_transactions').select('*, fund_lines(*)').order('occurred_on', { ascending: false }).order('seq', { ascending: false }).order('id', { ascending: false }),
+      fetchAllTransactions(supabase).then((data) => ({ data: data.reverse(), error: null }), (error: Error) => ({ data: null, error })),
       supabase.from('fund_accounts').select('*').order('sort_order'),
       supabase.from('fund_storages').select('*').order('sort_order'),
     ]);

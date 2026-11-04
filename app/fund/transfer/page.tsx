@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
-import { insertTransaction } from '@/lib/fund-db';
+import { fetchAllTransactions, insertTransaction } from '@/lib/fund-db';
 import { todayISO, fmtAmount, computeRunningBalances, buildTransferTexts, type FundAccount, type FundStorage, type FundTransaction } from '@/lib/fund';
 import { Field, FundNav, PageHeader, Loading, ErrorBox, inputCls, primaryBtnCls } from '../ui';
 
@@ -23,7 +23,7 @@ export default function TransferPage() {
   const load = async () => {
     const [ac, st, tx] = await Promise.all([
       supabase.from('fund_accounts').select('*'), supabase.from('fund_storages').select('*').eq('active', true).order('sort_order'),
-      supabase.from('fund_transactions').select('*, fund_lines(*)'),
+      fetchAllTransactions(supabase).then((data) => ({ data, error: null }), (error: Error) => ({ data: null, error })),
     ]);
     const err = ac.error ?? st.error ?? tx.error;
     if (err) { setError(err.message); setLoading(false); return; }

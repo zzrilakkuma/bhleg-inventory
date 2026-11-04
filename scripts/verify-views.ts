@@ -2,10 +2,11 @@
 // 用法：node --experimental-strip-types --env-file=.env.local scripts/verify-views.ts
 import { createClient } from '@supabase/supabase-js';
 import { computeRunningBalances } from '../lib/fund.ts';
+import { fetchAllTransactions } from '../lib/fund-db.ts';
 
 const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 
-// 分頁讀取全部列（PostgREST 預設上限 1000）。Task 5 的 fetchAllTransactions 完成後可替換此 helper。
+// 分頁讀取全部列（PostgREST 預設上限 1000）；交易改用 fetchAllTransactions，此 helper 僅供 snapshots。
 const fetchAll = async (table: string, select: string, orderCols: string[]): Promise<any[]> => {
   const PAGE = 1000;
   const rows: any[] = [];
@@ -34,7 +35,7 @@ const sameMap = (a: Record<number, number>, b: Record<number, number>) => {
 };
 
 const main = async () => {
-  const txs = await fetchAll('fund_transactions', '*, fund_lines(*)', ['occurred_on', 'seq', 'id']);
+  const txs = await fetchAllTransactions(s);
   const snaps = await fetchAll('fund_tx_snapshots', '*', ['ord']);
   const { data: mainAcc, error } = await s.from('fund_accounts').select('id').eq('kind', 'main').limit(1).single();
   if (error) throw error;

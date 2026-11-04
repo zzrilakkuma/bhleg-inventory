@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
-import { insertTransaction, type NewLine } from '@/lib/fund-db';
+import { fetchAllTransactions, insertTransaction, type NewLine } from '@/lib/fund-db';
 import {
   todayISO, fmtAmount, computeRunningBalances, loanRemaining, TAG_GROUP_LABEL,
   buildExpenseTexts, buildAdvanceSettleTexts, buildLoanTexts, buildRepaymentTexts, buildTransferTexts, buildOtherIncomeTexts,
@@ -61,7 +61,7 @@ export default function NewTransactionPage() {
         supabase.from('fund_tags').select('*').eq('active', true).order('sort_order'),
         supabase.from('fund_loans').select('*').order('id'),
         supabase.from('fund_repayments').select('*'),
-        supabase.from('fund_transactions').select('*, fund_lines(*)'),
+        fetchAllTransactions(supabase).then((data) => ({ data, error: null }), (error: Error) => ({ data: null, error })),
         supabase.from('fund_templates').select('*').eq('active', true).order('sort_order'),
       ]);
       const err = ac.error ?? st.error ?? ad.error ?? tg.error ?? ln.error ?? rp.error ?? tx.error;
@@ -188,7 +188,7 @@ export default function NewTransactionPage() {
           [{ account_id: accountId, storage_id: storageId, amount: amountNum }]);
       }
       toast.success(`已登錄 #${result.id}`);
-      const tx = await supabase.from('fund_transactions').select('*, fund_lines(*)');
+      const tx = await fetchAllTransactions(supabase).then((data) => ({ data, error: null }), (error: Error) => ({ data: null, error }));
       if (tx.data) setTransactions(tx.data as FundTransaction[]);
       if (kind === 'loan') { const ln = await supabase.from('fund_loans').select('*').order('id'); if (ln.data) setLoans(ln.data as FundLoan[]); }
       if (kind === 'repayment') { const rp = await supabase.from('fund_repayments').select('*'); if (rp.data) setRepayments(rp.data as FundRepayment[]); }

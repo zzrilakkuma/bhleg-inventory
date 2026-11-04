@@ -1,6 +1,7 @@
 // 登入後的後台寫入：交易 + 明細 + 子表，失敗時回滾主交易（cascade 刪除子資料）
-import { supabase } from '@/lib/supabase-client';
-import type { FundTransactionType } from '@/lib/fund';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from './supabase-client.ts';
+import type { FundTransaction, FundTransactionType } from './fund.ts';
 
 export interface NewLine { account_id: number; storage_id: number; amount: number; label?: string | null }
 
@@ -79,4 +80,23 @@ export const adjustTotal = async (opts: { transactionId: number; diff: number; a
   const { data: tx } = await supabase.from('fund_transactions').select('note').eq('id', opts.transactionId).single();
   const storageNote = `#小結矯正回歸 ${opts.diff > 0 ? '+' : ''}${opts.diff}元`;
   await supabase.from('fund_transactions').update({ note: `${tx?.note ?? ''}\n${storageNote}`.trim(), updated_at: new Date().toISOString() }).eq('id', opts.transactionId);
+};
+
+
+// 分批讀取全部交易（PostgREST 單次上限 1000 列）；依 occurred_on, seq, id 遞增回傳。
+export const fetchAllTransactions = async (client: SupabaseClient, pageSize = 1000): Promise<FundTransaction[]> => {
+  const rows: FundTransaction[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from('fund_transactions')
+      .select('*, fund_lines(*)')
+      .order('occurred_on')
+      .order('seq')
+      .order('id')
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data as FundTransaction[]));
+    if (data.length < pageSize) break;
+  }
+  return rows;
 };

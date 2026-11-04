@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
-import { insertTransaction, type NewLine } from '@/lib/fund-db';
+import { fetchAllTransactions, insertTransaction, type NewLine } from '@/lib/fund-db';
 import {
   computeRunningBalances, fmtAmount, loanRemaining, recentMonths, monthLabel, todayISO, FREEZE_RATE,
   buildRepaymentTexts, type BalanceSnapshot,
@@ -41,7 +41,7 @@ export default function SettlePage() {
     const [ac, st, tx, ln, rp, se] = await Promise.all([
       supabase.from('fund_accounts').select('*').order('sort_order'),
       supabase.from('fund_storages').select('*').order('sort_order'),
-      supabase.from('fund_transactions').select('*, fund_lines(*)'),
+      fetchAllTransactions(supabase).then((data) => ({ data, error: null }), (error: Error) => ({ data: null, error })),
       supabase.from('fund_loans').select('*').order('id'),
       supabase.from('fund_repayments').select('*'),
       supabase.from('fund_settlements').select('*'),
