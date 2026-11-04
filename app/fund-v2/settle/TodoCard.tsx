@@ -37,7 +37,7 @@ export default function TodoCard({ items, isAccountant, copyText }: {
           if (it.kind === 'unclaimed') {
             return (
               <li key={`u${i}`} className="py-2 text-sm text-white">
-                待請款代墊 {it.count} 筆 ｜ <span className="font-mono tabular-nums">{fmtAmount(it.sum)}</span>
+                待請款代墊 {it.count} 筆 ｜ <span className="font-mono tabular-nums">{fmtAmount(Math.abs(it.sum))}</span>
               </li>
             );
           }
