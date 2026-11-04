@@ -10,34 +10,55 @@ select t.*,
        row_number() over (order by t.occurred_on, t.seq, t.id) as ord
 from fund_transactions t;
 
+-- 每筆交易後的累計餘額。以視窗累加（O(n·k)，k = 有明細的科目／存放位置數）：
+-- 交易 × 科目（存放位置）的稠密格，左接該交易在該科目的淨額，依 ord 累加；
+-- 只輸出在該列（含）之前出現過明細的科目／存放位置。沒有明細的交易沿用前一列的累計。
 create or replace view fund_tx_snapshots as
+with tx_acc as (
+  select transaction_id, account_id, sum(amount) as amt from fund_lines group by 1, 2
+),
+tx_sto as (
+  select transaction_id, storage_id, sum(amount) as amt from fund_lines group by 1, 2
+),
+acc_grid as (
+  select o.id, a.account_id,
+         sum(coalesce(x.amt, 0)) over w as bal,
+         count(x.amt) over w as n
+  from fund_tx_ordered o
+  cross join (select distinct account_id from fund_lines) a
+  left join tx_acc x on x.transaction_id = o.id and x.account_id = a.account_id
+  window w as (partition by a.account_id order by o.ord)
+),
+sto_grid as (
+  select o.id, s.storage_id,
+         sum(coalesce(x.amt, 0)) over w as bal,
+         count(x.amt) over w as n
+  from fund_tx_ordered o
+  cross join (select distinct storage_id from fund_lines) s
+  left join tx_sto x on x.transaction_id = o.id and x.storage_id = s.storage_id
+  window w as (partition by s.storage_id order by o.ord)
+),
+acc as (
+  select id,
+         sum(bal) as total,
+         sum(bal) filter (where account_id = (select id from fund_accounts where kind = 'main' limit 1)) as main,
+         jsonb_object_agg(account_id::text, bal) filter (where n > 0) as accounts
+  from acc_grid group by id
+),
+sto as (
+  select id, jsonb_object_agg(storage_id::text, bal) filter (where n > 0) as storages
+  from sto_grid group by id
+)
 select o.id as transaction_id,
        o.ord,
        o.occurred_on,
-       coalesce((select sum(l.amount)
-                 from fund_lines l join fund_tx_ordered t on t.id = l.transaction_id
-                 where t.ord <= o.ord), 0) as total,
-       coalesce((select sum(l.amount)
-                 from fund_lines l join fund_tx_ordered t on t.id = l.transaction_id
-                 where t.ord <= o.ord
-                   and l.account_id = (select id from fund_accounts where kind = 'main' limit 1)), 0) as main,
+       coalesce(a.total, 0) as total,
+       coalesce(a.main, 0) as main,
        coalesce(a.accounts, '{}'::jsonb) as accounts,
        coalesce(s.storages, '{}'::jsonb) as storages
 from fund_tx_ordered o
-left join lateral (
-  select jsonb_object_agg(x.account_id::text, x.s) as accounts
-  from (select l.account_id, sum(l.amount) as s
-        from fund_lines l join fund_tx_ordered t on t.id = l.transaction_id
-        where t.ord <= o.ord
-        group by l.account_id) x
-) a on true
-left join lateral (
-  select jsonb_object_agg(x.storage_id::text, x.s) as storages
-  from (select l.storage_id, sum(l.amount) as s
-        from fund_lines l join fund_tx_ordered t on t.id = l.transaction_id
-        where t.ord <= o.ord
-        group by l.storage_id) x
-) s on true;
+left join acc a on a.id = o.id
+left join sto s on s.id = o.id;
 
 create or replace view fund_periods as
 select st.transaction_id as settlement_transaction_id,
@@ -45,7 +66,7 @@ select st.transaction_id as settlement_transaction_id,
        st.period_no,
        coalesce(lag(o.ord) over (order by o.ord), 0) + 1 as start_ord,
        o.ord as end_ord,
-       o.occurred_on as settled_on
+       coalesce(o.stated_on, o.occurred_on) as settled_on
 from fund_settlements st
 join fund_tx_ordered o on o.id = st.transaction_id;
 

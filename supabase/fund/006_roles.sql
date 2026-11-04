@@ -17,7 +17,7 @@ language sql security definer stable set search_path = public as $$
 $$;
 
 -- 對所有 public.fund_% 表：登入者可讀，僅會計可寫
-create or replace function fund_apply_policies() returns void language plpgsql as $$
+create or replace function fund_apply_policies() returns void language plpgsql set search_path = public as $$
 declare t text;
 begin
   for t in select tablename from pg_tables where schemaname = 'public' and tablename like 'fund\_%' loop
