@@ -34,7 +34,9 @@ export type PlannedTx = {
 }
 
 export type Payable = { title: string; amount: number; due_on: string | null; vendor: string | null }
-export type PreLoan = { lender: string; principal: number; started_on: string }
+export type PreLoan = { lender: string; principal: number; started_on: string; lender_member_id: number | null }
+/** CSV snapshot (name → balance, incl. 小結) the ledger must show right after transaction `importRow`. */
+export type Checkpoint = { importRow: number; snapshot: Record<string, number> }
 export type MissingRef = { kind: 'account' | 'storage' | 'member'; name: string }
 export type Mismatch = { row: number; expected: Delta; built: Delta }
 
@@ -49,6 +51,8 @@ export type Plan = {
   solverRows: number[]
   /** refs extended with temporary negative ids for missingRefs accounts/storages */
   refs: Refs
+  /** rows with a consistent CSV snapshot, in plan order */
+  checkpoints: Checkpoint[]
 }
 
 export type PlanOptions = { allowFix?: boolean }
@@ -136,6 +140,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
   const payables: Payable[] = []
   const preLoans: PreLoan[] = []
   const solverRows: number[] = []
+  const checkpoints: Checkpoint[] = []
   let tmpId = -1
 
   const postId = () => refs.storages.find((s) => s.name === POST)!.id
@@ -205,7 +210,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
   const repaymentRow = (lender: string, principal: number, fee: number): Record<string, unknown> => {
     const lenderId = memberByName(lender)?.id ?? null
     const loan = plannedLoans.find((l) => l.lender === lender || (lenderId !== null && l.memberId === lenderId))
-    if (!loan && !preLoans.some((p) => p.lender === lender)) preLoans.push({ lender, principal: 0, started_on: PRE_LOAN_START })
+    if (!loan && !preLoans.some((p) => p.lender === lender)) preLoans.push({ lender, principal: 0, started_on: PRE_LOAN_START, lender_member_id: lenderId })
     if (!loan) repaidByLender.set(lender, (repaidByLender.get(lender) ?? 0) + principal)
     return {
       loan_id: null,
@@ -518,6 +523,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
     for (const t of extraTxs) push(t)
     push(base)
     if (target) {
+      checkpoints.push({ importRow: r.row, snapshot: cur! })
       prev = cur
       pending = []
       pendingRows = []
@@ -539,5 +545,5 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
   }
 
   for (const t of txs) for (const w of t.warns) warns.push(`row ${t.importRow}: ${w}`)
-  return { txs, payables, preLoans, missingRefs, mismatches, warns, solverRows, refs }
+  return { txs, payables, preLoans, missingRefs, mismatches, warns, solverRows, refs, checkpoints }
 }

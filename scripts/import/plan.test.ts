@@ -79,6 +79,20 @@ test('first 20 rows: 19 txs, no mismatches, opening 46, Barney two lines', () =>
   assert.ok(barney.lines.some((l) => l.account_id === 20 && l.amount === 11000))
 })
 
+test('first 20 rows: checkpoints carry each consistent CSV snapshot keyed by import row', () => {
+  const p = planImport(FIRST20, refs)
+  const withSnap = FIRST20.filter((r) => r.snapshotCell.trim() !== '').map((r) => r.row)
+  assert.deepEqual(p.checkpoints.map((c) => c.importRow), withSnap)
+  assert.deepEqual(p.checkpoints[0], {
+    importRow: 2,
+    snapshot: { 不凍結零用金: 46, 緊急應變備用金: 0, 共存前瞻預算: 0, 郵局: 46, 現金: 0, 小結: 46 },
+  })
+  const last = FIRST20[FIRST20.length - 1]
+  assert.equal(p.checkpoints[p.checkpoints.length - 1].snapshot['小結'], Number(last.snapshotCell.match(/小結：(-?[\d,]+)/)![1].replace(/,/g, '')))
+  // every checkpoint names a planned transaction
+  for (const c of p.checkpoints) assert.ok(p.txs.some((t) => t.importRow === c.importRow))
+})
+
 test('first 20 rows: seq, monotonic occurredOn, statedOn', () => {
   const p = planImport(FIRST20, refs)
   assert.ok(p.txs.every((t) => t.seq === t.importRow * 10))
@@ -164,8 +178,8 @@ test('settlement: repayments extracted first, solver freeze lines, settlement su
     },
   })
   assert.deepEqual(p.preLoans, [
-    { lender: '嚴昕', principal: 13700, started_on: '2024-11-01' },
-    { lender: 'Ruby', principal: 13700, started_on: '2024-11-01' },
+    { lender: '嚴昕', principal: 13700, started_on: '2024-11-01', lender_member_id: 6 },
+    { lender: 'Ruby', principal: 13700, started_on: '2024-11-01', lender_member_id: 3 },
   ])
 })
 

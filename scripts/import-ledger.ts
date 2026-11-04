@@ -1,19 +1,35 @@
 // 匯入總表流水帳。
-// 用法：node --experimental-strip-types --env-file=.env.local scripts/import-ledger.ts --dry-run [--csv=PATH] [--until=ROW] [--allow-fix]
-// 寫入模式（--reset）於 Task 10 實作。
+// 用法：node --experimental-strip-types --env-file=.env.local scripts/import-ledger.ts (--dry-run | --reset) [--csv=PATH] [--until=ROW] [--allow-fix]
+//   --dry-run  只規劃、印出摘要，不寫入。
+//   --reset    刪除全部流水帳（交易、應付、帳前借款）後重新匯入，並以 CSV 快照逐列驗證。
 import { readFileSync } from 'node:fs'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { fetchAllTransactions } from '../lib/fund-db.ts'
 import { parseCsv } from './import/csv.ts'
 import { toRawRows } from './import/normalize.ts'
 import { planImport, type Plan, type PlanRefs } from './import/plan.ts'
+import { resetLedger, verifyImport, writePlan } from './import/write.ts'
 
 const DEFAULT_CSV = '巢穴參考資料/巢穴共同體 公基金計畫 流水帳 - 總表.csv'
 
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3)
 const flag = (name: string) => process.argv.includes(`--${name}`)
 
-async function loadRefs(): Promise<PlanRefs> {
-  const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+const USAGE = 'usage: import-ledger.ts (--dry-run | --reset) [--csv=PATH] [--until=ROW] [--allow-fix]'
+
+const serviceClient = () =>
+  createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+
+async function count(s: SupabaseClient, table: string, filter?: { eq?: [string, string]; isNull?: string }): Promise<number> {
+  let q = s.from(table).select('id', { count: 'exact', head: true })
+  if (filter?.eq) q = q.eq(...filter.eq)
+  if (filter?.isNull) q = q.is(filter.isNull, null)
+  const { count: n, error } = await q
+  if (error) throw new Error(`${table}: ${error.message}`)
+  return n ?? 0
+}
+
+async function loadRefs(s: SupabaseClient): Promise<PlanRefs> {
   const q = async (table: string) => {
     const { data, error } = await s.from(table).select('*')
     if (error) throw new Error(`${table}: ${error.message}`)
@@ -73,17 +89,49 @@ export function printPlan(plan: Plan, rowCount: number) {
 }
 
 async function main() {
-  if (flag('reset')) {
-    console.error('write mode not implemented yet (Task 10)')
+  const dry = flag('dry-run')
+  const reset = flag('reset')
+  const s = serviceClient()
+  if (dry === reset) {
+    // No mode (or both): refuse. Say so explicitly when an import is already in the ledger.
+    if (!dry) {
+      const existing = await count(s, 'fund_transactions', { eq: ['source', 'import'] })
+      if (existing) console.error(`已有 ${existing} 筆 source='import' 交易；要重新匯入請加 --reset（會刪除全部流水帳）。`)
+    }
+    console.error(USAGE)
     process.exit(2)
   }
   const csv = arg('csv') ?? DEFAULT_CSV
   const until = arg('until') ? Number(arg('until')) : Infinity
   const rows = toRawRows(parseCsv(readFileSync(csv, 'utf8'))).filter((r) => r.row <= until)
-  const refs = await loadRefs()
+  const refs = await loadRefs(s)
   const plan = planImport(rows, refs, { allowFix: flag('allow-fix') })
   printPlan(plan, rows.length)
-  process.exit(plan.mismatches.length ? 1 : 0)
+  if (dry) process.exit(plan.mismatches.length ? 1 : 0)
+
+  // --reset: refuse to delete anything unless the plan is clean.
+  const missingMembers = plan.missingRefs.filter((m) => m.kind === 'member')
+  if (plan.mismatches.length || missingMembers.length) {
+    console.error(`ABORT before deleting: ${plan.mismatches.length} mismatches (rows ${plan.mismatches.map((m) => m.row).join(',')}), missing members: ${missingMembers.map((m) => m.name).join(',') || '-'}`)
+    process.exit(1)
+  }
+  const [txCount, payableCount, preLoanCount] = await Promise.all([
+    count(s, 'fund_transactions'),
+    count(s, 'fund_payables'),
+    count(s, 'fund_loans', { isNull: 'transaction_id' }),
+  ])
+  console.log(`reset: deleting ${txCount} fund_transactions, ${payableCount} fund_payables, ${preLoanCount} pre-ledger fund_loans`)
+  await resetLedger(s)
+  const { inserted, plan: written } = await writePlan(s, plan)
+  console.log(`inserted ${inserted}`)
+
+  const res = verifyImport(await fetchAllTransactions(s), written)
+  if (!res.ok) {
+    console.error(`IMPORT MISMATCH ${res.message}`)
+    process.exit(1)
+  }
+  console.log(`IMPORT OK ${res.verified} rows verified, final total ${res.total}`)
+  process.exit(0)
 }
 
 main().catch((e) => {
