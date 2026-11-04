@@ -90,3 +90,9 @@ test('monthlyCapWarning splits across months, names first offender', () => {
   // 2400 over 11+12 -> 1200: Nov 5200 over
   assert.match(monthlyCapWarning({ id: 7 }, ['2026-11', '2026-12'], ex, 2400, 5000)!, /^11月累計 5200/);
 });
+
+test('monthlyCapWarning spreads prior multi-month donations evenly', () => {
+  const prior = [{ member_id: 7, months: ['2026-11', '2026-12'], amount: 3000 }];
+  assert.equal(monthlyCapWarning({ id: 7 }, ['2026-11'], prior, 1500, 5000), null);
+  assert.match(monthlyCapWarning({ id: 7 }, ['2026-11'], prior, 1500, 2500)!, /^11月累計 3000/);
+});

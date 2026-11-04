@@ -92,8 +92,8 @@ export const monthlyCapWarning = (
   if (!months.length) return null;
   const share = amount / months.length;
   for (const m of [...months].sort()) {
-    const sum = existing.filter((d) => d.member_id === member.id && d.months.includes(m))
-      .reduce((s, d) => s + d.amount, 0) + share;
+    const sum = existing.filter((d) => d.member_id === member.id && d.months.length > 0 && d.months.includes(m))
+      .reduce((s, d) => s + d.amount / d.months.length, 0) + share;
     if (sum > cap) return `${monthLabel(m)}累計 ${Math.round(sum)}，超過章程單月上限 ${cap}（僅提醒）`;
   }
   return null;
