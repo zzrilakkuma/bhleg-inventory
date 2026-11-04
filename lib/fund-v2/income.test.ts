@@ -65,9 +65,28 @@ test('loan → loan tx + fund_loans sub', () => {
   assert.equal(w2.sub?.row.lender_name, '朋友'); assert.equal(w2.sub?.row.lender_member_id, null);
 });
 
-test('monthlyCapWarning', () => {
-  const ex = [{ member_id: 7, month: '2026-11', amount: 4000 }, { member_id: 7, month: '2026-10', amount: 9000 }, { member_id: 8, month: '2026-11', amount: 9000 }];
-  assert.equal(monthlyCapWarning({ id: 7 }, '2026-11', ex, 1500, 5000), '本月累計 5500，超過章程單月上限 5000（僅提醒）');
-  assert.equal(monthlyCapWarning({ id: 7 }, '2026-11', ex, 1000, 5000), null);
-  assert.equal(monthlyCapWarning({ id: 7 }, '2026-12', ex, 1000, 5000), null);
+test('non-donation message goes to tx.comment', () => {
+  const w = buildIncomeWrite({ ...base, source: 'salon', amount: 800, message: ' 謝謝 ' });
+  assert.equal(w.tx.comment, '謝謝');
+  const d = buildIncomeWrite({ ...base, source: 'donation', amount: 800, member: mem, message: 'hi' });
+  assert.equal(d.tx.comment, undefined);
+});
+
+const ex = [
+  { member_id: 7, months: ['2026-11'], amount: 4000 },
+  { member_id: 7, months: ['2026-10'], amount: 9000 },
+  { member_id: 8, months: ['2026-11'], amount: 9000 },
+];
+test('monthlyCapWarning single month', () => {
+  assert.equal(monthlyCapWarning({ id: 7 }, ['2026-11'], ex, 1500, 5000), '11月累計 5500，超過章程單月上限 5000（僅提醒）');
+  assert.equal(monthlyCapWarning({ id: 7 }, ['2026-11'], ex, 1000, 5000), null);
+  assert.equal(monthlyCapWarning({ id: 7 }, ['2026-12'], ex, 1000, 5000), null);
+});
+test('monthlyCapWarning splits across months, names first offender', () => {
+  // 3000 over 10+11 -> 1500 each; Oct 9000+1500 over, Nov 5500 over -> Oct first
+  assert.match(monthlyCapWarning({ id: 7 }, ['2026-11', '2026-10'], ex, 3000, 5000)!, /^10月累計 10500/);
+  // 2000 over 11+12 -> 1000 each; Nov 5000 not over, Dec fine
+  assert.equal(monthlyCapWarning({ id: 7 }, ['2026-11', '2026-12'], ex, 2000, 5000), null);
+  // 2400 over 11+12 -> 1200: Nov 5200 over
+  assert.match(monthlyCapWarning({ id: 7 }, ['2026-11', '2026-12'], ex, 2400, 5000)!, /^11月累計 5200/);
 });

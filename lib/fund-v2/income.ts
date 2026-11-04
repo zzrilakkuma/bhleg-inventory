@@ -1,5 +1,5 @@
 // 記 — 收入：純函式（寫入組裝、專款分配、單月上限提醒）。
-import { buildDonationTexts, buildOtherIncomeTexts, buildLoanTexts, INCOME_SOURCE_LABEL } from '../fund.ts';
+import { buildDonationTexts, buildOtherIncomeTexts, buildLoanTexts, INCOME_SOURCE_LABEL, monthLabel } from '../fund.ts';
 import type { FundMember, FundHandler, FundStorage, IncomeSource } from '../fund.ts';
 import type { NewTransaction, NewLine } from '../fund-db.ts';
 import type { Refs } from './api.ts';
@@ -34,6 +34,7 @@ export const buildIncomeWrite = (i: {
   const { lines } = allocationLines(i.amount, i.allocations, i.storage, i.refs);
   const common = { occurred_on: i.date, amount: i.amount, seq: i.seq, income_source: i.source };
   const desc = (i.description ?? '').trim();
+  const comment = i.message?.trim() || null;
 
   if (i.source === 'donation' && i.member) {
     const t = buildDonationTexts({
@@ -60,7 +61,7 @@ export const buildIncomeWrite = (i: {
     if (!lender) throw new Error('缺少出借人');
     const t = buildLoanTexts({ lender, storageName: i.storage.name });
     return {
-      tx: { ...common, type: 'loan', title: t.title, voucher: t.voucher, note: t.note },
+      tx: { ...common, comment, type: 'loan', title: t.title, voucher: t.voucher, note: t.note },
       lines,
       sub: {
         table: 'fund_loans',
@@ -78,16 +79,22 @@ export const buildIncomeWrite = (i: {
     source: label, description: desc, storageName: i.storage.name, accountName: i.refs.accounts.find((a) => a.kind === 'main')?.name ?? '', refund,
   });
   return {
-    tx: { ...common, type: refund ? 'refund' : 'income', title: t.title, voucher: t.voucher, note: t.note },
+    tx: { ...common, comment, type: refund ? 'refund' : 'income', title: t.title, voucher: t.voucher, note: t.note },
     lines,
   };
 };
 
-/** 該成員在 month 的累計 + 本筆 > cap → 提醒文字；否則 null。只提醒，不擋。 */
+/** 逐月檢查：該成員該月既有（donation.months 含該月）+ 本筆平均分攤 > cap → 提醒第一個超過的月；否則 null。只提醒，不擋。 */
 export const monthlyCapWarning = (
-  member: { id: number }, month: string,
-  existing: { member_id: number; month: string; amount: number }[], amount: number, cap: number,
+  member: { id: number }, months: string[],
+  existing: { member_id: number; months: string[]; amount: number }[], amount: number, cap: number,
 ): string | null => {
-  const sum = existing.filter((d) => d.member_id === member.id && d.month === month).reduce((s, d) => s + d.amount, 0) + amount;
-  return sum > cap ? `本月累計 ${sum}，超過章程單月上限 ${cap}（僅提醒）` : null;
+  if (!months.length) return null;
+  const share = amount / months.length;
+  for (const m of [...months].sort()) {
+    const sum = existing.filter((d) => d.member_id === member.id && d.months.includes(m))
+      .reduce((s, d) => s + d.amount, 0) + share;
+    if (sum > cap) return `${monthLabel(m)}累計 ${Math.round(sum)}，超過章程單月上限 ${cap}（僅提醒）`;
+  }
+  return null;
 };

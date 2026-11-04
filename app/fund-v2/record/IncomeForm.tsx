@@ -51,14 +51,13 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
   const [message, setMessage] = useState('');
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
-  const [existing, setExisting] = useState<{ member_id: number; month: string; amount: number }[]>([]);
+  const [existing, setExisting] = useState<{ member_id: number; months: string[]; amount: number }[]>([]);
 
   const isDonation = source === 'donation';
   const member = members.find((m) => m.id === memberId);
   const payer = members.find((m) => m.id === payerId);
   const handler = handlers.find((h) => h.id === handlerId);
   const amt = Number(amount);
-  const month = date.slice(0, 7);
 
   const onMember = (id: number | null) => {
     setMemberId(id);
@@ -71,21 +70,20 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
     ? (method === 'transfer' ? post : cashSt)
     : storages.find((s) => s.id === storageId);
 
-  // 本月該成員累計（用於上限提醒）
+  // 該成員既有奉納（依涵蓋月份）用於上限提醒
   const loadExisting = useCallback(async () => {
-    const [y, m] = month.split('-').map(Number);
-    const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
-    const q = await supabase.from('fund_donations').select('member_id, fund_transactions!inner(occurred_on, amount)')
-      .gte('fund_transactions.occurred_on', `${month}-01`).lt('fund_transactions.occurred_on', next);
+    if (!memberId) { setExisting([]); return; }
+    const q = await supabase.from('fund_donations').select('member_id, months, fund_transactions!inner(amount)')
+      .eq('member_id', memberId);
     if (q.error) { toast.error(`累計載入失敗：${q.error.message}`); return; }
     setExisting((q.data ?? []).map((x: any) => {
       const t = Array.isArray(x.fund_transactions) ? x.fund_transactions[0] : x.fund_transactions;
-      return { member_id: x.member_id, month, amount: Number(t.amount) };
+      return { member_id: x.member_id, months: x.months ?? [], amount: Number(t.amount) };
     }));
-  }, [month]);
+  }, [memberId]);
   useEffect(() => { loadExisting(); }, [loadExisting]);
 
-  const warning = isDonation && member && amt > 0 ? monthlyCapWarning(member, month, existing, amt, cap) : null;
+  const warning = isDonation && member && amt > 0 ? monthlyCapWarning(member, months, existing, amt, cap) : null;
 
   const allocations = useMemo(
     () => specials.map((a) => ({ accountId: a.id, amount: Number(alloc[a.id]) || 0 })).filter((a) => a.amount > 0),
@@ -93,13 +91,13 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
   const allocated = allocations.reduce((s, a) => s + a.amount, 0);
   const remainder = amt - allocated;
 
-  const sourceOk = isDonation ? !!member && (method === 'transfer' || !!handler)
+  const sourceOk = isDonation ? !!member && months.length > 0 && (method === 'transfer' || !!handler)
     : source === 'loan' ? (!!member || description.trim() !== '') : true;
   const ready = amt > 0 && sourceOk && !!storage && remainder >= 0;
 
   const reset = () => {
     setAmount(''); setMemberId(null); setLast5(''); setHandlerId(null); setDescription(''); setAlloc({});
-    setMonths([curMonth]); setPayerId(null); setMessage(''); setDate(today());
+    setMonths([curMonth]); setPayerId(null); setMessage(''); setDate(today()); setStorageId(null);
   };
 
   const submit = async () => {
@@ -155,6 +153,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
           <Chip on={amt === STANDARD_AMOUNT} onClick={() => setAmount(String(STANDARD_AMOUNT))}>{fmtAmount(STANDARD_AMOUNT)}</Chip>
         </div>
       )}
+      {isDonation && months.length === 0 && <p className="text-yellow-400 text-sm mt-2">請選至少一個月</p>}
       {warning && <p className="text-yellow-400 text-sm mt-2">{warning}</p>}
 
       {isDonation ? (
