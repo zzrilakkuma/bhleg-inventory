@@ -350,7 +350,7 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
     let freezeBase: number | null = null
     if (cls.type === 'settlement') {
       base.amount = 0
-      base.seq = r.row * 10 + 1
+      base.seq = r.row * 10 + 5
       const sid = tags.storage === CASH ? cashId() : postId()
       let k = 0
       for (const m of r.note.matchAll(REPAY_RE)) {
@@ -360,10 +360,10 @@ export function planImport(rows: RawRow[], baseRefs: PlanRefs, opts: PlanOptions
         const rtx: PlannedTx = {
           ...base,
           type: 'repayment',
-          // Negative so the partial unique index on import_row holds; a second repayment in the
-          // same settlement note would collide on -row, so it gets -(row*10+k).
-          importRow: k === 0 ? -r.row : -(r.row * 10 + k),
-          seq: r.row * 10,
+          // k-th repayment of settlement row R: seq R*10+k, importRow -(R*10+k) (negative keeps the
+          // partial unique index on import_row; the settlement itself is seq R*10+5, importRow R).
+          importRow: -(r.row * 10 + k),
+          seq: r.row * 10 + k,
           title: `償還 ${lender} 所提供之借款（${title.replace(/\*/g, '')}）`,
           voucher: null,
           note: m[0].replace(/\s*\n\s*/g, ' '),

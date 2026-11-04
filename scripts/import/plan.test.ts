@@ -146,7 +146,7 @@ test('settlement: repayments extracted first, solver freeze lines, settlement su
   ], refs)
   assert.deepEqual(p.mismatches, [])
   assert.deepEqual(p.txs.map((t) => [t.type, t.importRow, t.seq, t.amount]), [
-    ['opening', 2, 20, 2000], ['repayment', -3, 30, -312], ['repayment', -31, 30, -300], ['settlement', 3, 31, 0],
+    ['opening', 2, 20, 2000], ['repayment', -30, 30, -312], ['repayment', -31, 31, -300], ['settlement', 3, 35, 0],
   ])
   assert.equal(new Set(p.txs.map((t) => t.importRow)).size, p.txs.length, 'import_row unique')
   const [, r1, r2, st] = p.txs
@@ -183,6 +183,7 @@ test('settlement: 12月結算 in January is previous year; zero freeze reasons; 
   assert.equal(a.zero_reason, '匯入：原因未註明')
   assert.equal(a.late_days, 18)
   assert.equal(b.period_no, 2)
+  assert.equal(p.txs.find((t) => t.importRow === 3)!.seq, 35)
   assert.equal(b.zero_reason, '因餘款不足')
 })
 
@@ -350,4 +351,20 @@ test('歸零清算 zone: rows from after the last snapshot to before the opening
   assert.deepEqual(on[7], ['2026-01-15', '2026-01-15'])
   assert.deepEqual(on[8], ['2026-01-15', '2026-01-05']) // monotonic again after the zone
   assert.deepEqual(p.mismatches, [])
+})
+
+test('real row 467 (1月結算, two repayments): repayment and settlement keys', () => {
+  const p = planImport([
+    opening({ 不凍結零用金: 8664, 緊急應變備用金: 0, 共存前瞻預算: 0, 郵局: 8664 }, '8664'),
+    mk({
+      row: 467, kind: '結算', date: '2026/2/3\n（延後結算）', title: '***1月結算***', voucher: '#郵局帳戶\n#現金袋', amountCell: '***1月結算***',
+      note: '#不凍結零用金剩餘：8664*30%=2599.2\n#整數計算為2599元\n#不凍結零用金2599元以「緊急應變備用金」凍存\n#不凍結零用金2599元以「共存前瞻預算」凍存\n#不凍結零用金預留3466元\n\n#不凍結零用金1700元用以償還\n巢穴人嚴昕所提供之「巢穴緊急紓困借款」\n#不凍結零用金1700元用以償還\n巢穴人Ruby所提供之「巢穴緊急紓困借款」\n#不凍結零用金預留66元\n\n嚴昕借款 剩餘18300元 尚待償還\nRuby借款 剩餘18300元 尚待償還',
+      snapshotCell: snap({ 不凍結零用金: 66, 緊急應變備用金: 2599, 共存前瞻預算: 2599, 郵局: 5264 }),
+    }),
+  ].map((r, i) => (i === 0 ? { ...r, row: 466 } : r)), refs)
+  assert.deepEqual(p.mismatches, [])
+  assert.deepEqual(p.txs.slice(1).map((t) => [t.type, t.importRow, t.seq]), [
+    ['repayment', -4670, 4670], ['repayment', -4671, 4671], ['settlement', 467, 4675],
+  ])
+  assert.equal(new Set(p.txs.map((t) => t.importRow)).size, p.txs.length)
 })
