@@ -55,7 +55,7 @@ export default function LedgerPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">帳</h1>
         {periods && periods.length > 0 && (
-          <select value={sel} onChange={(e) => { setSel(Number(e.target.value)); setMore(0); }}
+          <select value={sel} onChange={(e) => { setSel(Number(e.target.value)); setMore(0); setRows([]); }}
             className="bg-black border border-[#333333] rounded px-3 py-2 text-sm text-gray-300">
             {periods.map((p, i) => <option key={p.settlement_transaction_id} value={i}>{periodLabel(p)}</option>)}
           </select>
@@ -66,7 +66,7 @@ export default function LedgerPage() {
       {snap && <BalanceCard snap={snap} refs={refs} />}
       {snap === null && <p className="text-gray-500 text-sm">尚無交易</p>}
       {snap !== undefined && (
-        <LedgerList rows={rows} refs={refs} isAccountant={role === 'accountant'}
+        <LedgerList key={sel} rows={rows} refs={refs} isAccountant={role === 'accountant'}
           hasEarlier={hasEarlier} onLoadEarlier={() => setMore((m) => m + 1)} onChanged={reload} />
       )}
     </div>

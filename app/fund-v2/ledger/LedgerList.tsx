@@ -40,7 +40,7 @@ export default function LedgerList({ rows, refs, isAccountant, hasEarlier, onLoa
       <div className="mt-3">
         {groups.length === 0 && <p className="text-gray-500 text-sm py-6 text-center">沒有符合的紀錄</p>}
         {groups.map((g) => (
-          <section key={g.date}>
+          <section key={`${g.date}#${g.rows[0].id}`}>
             <div className="sticky top-0 z-10 bg-black py-1 px-1 text-xs text-gray-500 border-b border-[#222222]">{ymd(g.date)}</div>
             {g.rows.map((r) => {
               const s = rowSummary(r);

@@ -6,7 +6,8 @@ create view fund_ledger_rows as
 select o.*,
        s.total, s.main, s.accounts, s.storages,
        e.claim_status, e.vendor, e.tags,
-       d.member_id
+       d.member_id,
+       (select coalesce(sum(l.amount) filter (where l.amount > 0), 0) from fund_lines l where l.transaction_id = o.id) as moved
 from fund_tx_ordered o
 join fund_tx_snapshots s on s.transaction_id = o.id
 left join fund_expenses e on e.transaction_id = o.id

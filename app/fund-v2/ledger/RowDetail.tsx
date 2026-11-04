@@ -19,12 +19,13 @@ export default function RowDetail({ row, refs, isAccountant, onChanged }: {
   const [comment, setComment] = useState(row.comment ?? '');
   const [busy, setBusy] = useState(false);
 
+  const structural = ['settlement', 'opening', 'reset', 'group_summary'].includes(row.type);
   const snapText = formatSnapshot({ accounts: row.accounts, storages: row.storages, total: row.total }, refs?.accounts ?? [], refs?.storages ?? []);
 
   const save = async () => {
     setBusy(true);
     try {
-      await updateTransaction(row.id, { title, occurred_on: occurredOn, note: note || null, comment: comment || null });
+      await updateTransaction(row.id, { title, occurred_on: occurredOn, stated_on: occurredOn, note: note || null, comment: comment || null });
       toast.success('已更新');
       setEditing(false);
       onChanged();
@@ -60,14 +61,14 @@ export default function RowDetail({ row, refs, isAccountant, onChanged }: {
         </>
       )}
       <pre className="text-xs text-gray-400 whitespace-pre-wrap font-mono tabular-nums">{snapText}</pre>
-      {isAccountant && !editing && (
+      {isAccountant && !structural && !editing && (
         <div className="flex gap-2 pt-1">
           <Chip onClick={() => setEditing(true)}>編輯</Chip>
           <button type="button" disabled={busy} onClick={del}
             className="px-3 py-2 rounded border border-[#FF0055]/50 text-[#FF0055] text-sm disabled:opacity-50">刪除</button>
         </div>
       )}
-      {isAccountant && editing && (
+      {isAccountant && !structural && editing && (
         <div className="space-y-2">
           <label className="block text-xs text-gray-500">標題<textarea className={inp} rows={2} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
           <label className="block text-xs text-gray-500">發生日<input type="date" className={inp} value={occurredOn} onChange={(e) => setOccurredOn(e.target.value)} /></label>

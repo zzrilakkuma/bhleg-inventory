@@ -23,7 +23,7 @@ export const rowSummary = (r: LedgerRow): { title: string; amount: number | null
   const title = (r.title ?? '').split('\n')[0];
   if (IN.has(r.type)) return { title, amount: Math.abs(r.amount), kind: 'in' };
   if (OUT.has(r.type)) return { title, amount: Math.abs(r.amount), kind: 'out' };
-  if (r.type === 'transfer') return { title, amount: Math.abs(r.amount), kind: 'neutral' };
+  if (r.type === 'transfer') return { title, amount: Math.abs(r.moved), kind: 'neutral' };
   return { title, amount: null, kind: 'neutral' };
 };
 

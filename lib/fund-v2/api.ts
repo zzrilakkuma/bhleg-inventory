@@ -96,7 +96,7 @@ export interface LedgerRow {
   stated_on: string | null; date_note: string | null; off_ledger: boolean; income_source: string | null;
   decision_ref: string | null; group_id: number | null;
   total: number; main: number; accounts: Record<number, number>; storages: Record<number, number>;
-  claim_status: ClaimStatus | null; vendor: string | null; tags: string[] | null; member_id: number | null;
+  moved: number; claim_status: ClaimStatus | null; vendor: string | null; tags: string[] | null; member_id: number | null;
 }
 
 export const getLedgerRows = async (
@@ -107,7 +107,7 @@ export const getLedgerRows = async (
     .gte('ord', range.fromOrd).lte('ord', range.toOrd)
     .order('ord', { ascending: false }).limit(limit));
   return rows.map((r) => ({
-    ...r, id: num(r.id), ord: num(r.ord), seq: num(r.seq), amount: num(r.amount),
+    ...r, id: num(r.id), ord: num(r.ord), seq: num(r.seq), amount: num(r.amount), moved: num(r.moved),
     total: num(r.total), main: num(r.main), accounts: numMap(r.accounts), storages: numMap(r.storages),
     group_id: r.group_id == null ? null : num(r.group_id), member_id: r.member_id == null ? null : num(r.member_id),
   }));

@@ -53,7 +53,7 @@ export const deleteTransaction = async (id: number) => {
 
 export const updateTransaction = async (
   id: number,
-  patch: Partial<Pick<NewTransaction, 'occurred_on' | 'title' | 'voucher' | 'note' | 'comment' | 'amount'>>,
+  patch: Partial<Pick<NewTransaction, 'occurred_on' | 'title' | 'voucher' | 'note' | 'comment' | 'amount'>> & { stated_on?: string | null },
   singleLineAmount?: { lineId: number; amount: number },
 ) => {
   const { error } = await supabase.from('fund_transactions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
