@@ -26,6 +26,25 @@ test('parseAmounts', () => {
   assert.deepEqual(parseAmounts('+500', -1), [{ amount: 500, label: null }])
   assert.deepEqual(parseAmounts('·（Kody專款）', 1), [{ amount: 0, label: 'Kody專款' }])
   assert.deepEqual(parseAmounts('+\n300', -1), [{ amount: 300, label: null }])
+  assert.deepEqual(parseAmounts('6000\n（Kody手術專款）', 1), [{ amount: 6000, label: 'Kody手術專款' }])
+  assert.deepEqual(parseAmounts('5000\n+15000\n（緊急應變備用金）', 1), [
+    { amount: 5000, label: null },
+    { amount: 15000, label: '緊急應變備用金' },
+  ])
+  assert.deepEqual(
+    parseAmounts(
+      '5000\n+10000\n（共同債務專用）\n+2000\n（緊急應變備用金）\n+2000\n（共存前瞻預算）\n+1000\n（蘭室樂團 小組專款）\n+14000\n（印表機碳粉匣專用）',
+      1,
+    ),
+    [
+      { amount: 5000, label: null },
+      { amount: 10000, label: '共同債務專用' },
+      { amount: 2000, label: '緊急應變備用金' },
+      { amount: 2000, label: '共存前瞻預算' },
+      { amount: 1000, label: '蘭室樂團 小組專款' },
+      { amount: 14000, label: '印表機碳粉匣專用' },
+    ],
+  )
   assert.throws(() => parseAmounts('abc', 1), /abc/)
 })
 
@@ -71,6 +90,8 @@ test('parseTags', () => {
   assert.equal(b.storage, null)
   assert.equal(b.member, null)
   assert.deepEqual(parseTags('#「郵局」轉入「現金袋」5000元').transfers, [{ from: '郵局', to: '現金', amount: 5000 }])
+  assert.equal(parseTags('#現金袋支出').storage, '現金')
+  assert.equal(parseTags('#郵局支付').storage, '郵局')
   assert.equal(parseTags('#廚房隨喜桶').storage, '現金（廚房）')
   assert.equal(parseTags('#匯入 #存放現金袋').storage, '郵局')
   assert.equal(parseTags('#艾摩爾信用卡預先支付').advancer, '信用卡')

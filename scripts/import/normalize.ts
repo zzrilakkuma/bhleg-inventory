@@ -58,6 +58,10 @@ export function parseAmounts(cell: string, sign: 1 | -1): { amount: number; labe
   for (let i = 0; i < lines.length; i++) {
     let t = lines[i]
     if (t === '') continue
+    if (t.startsWith('（') && tokens.length > 0) {
+      tokens[tokens.length - 1] += t
+      continue
+    }
     if (t === '+' || t === '-') {
       let j = i + 1
       while (j < lines.length && lines[j] === '') j++
@@ -99,8 +103,8 @@ export type Storage = '郵局' | '現金' | '現金（廚房）'
 export type Advancer = '中央蘭室' | '信用卡'
 
 const STORAGE_RULES: [Storage, string[]][] = [
-  ['郵局', ['#存放郵局', '#匯入', '#匯出', '#郵局支出', '#存入郵局', '#郵局']],
-  ['現金', ['#存放現金袋', '#現金', '#現金袋支付', '#存放現金', '#現金支出']],
+  ['郵局', ['#存放郵局', '#匯入', '#匯出', '#郵局支出', '#存入郵局', '#郵局', '#郵局支付', '#存入郵局支付', '#郵局帳戶存摺']],
+  ['現金', ['#存放現金袋', '#現金', '#現金袋支付', '#存放現金', '#現金支出', '#現金袋支出', '#現金支付']],
   ['現金（廚房）', ['#廚房隨喜桶']],
 ]
 const KEYWORDS = new Set<string>([
