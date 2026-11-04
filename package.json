@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --env-file=.env.local --test \"lib/**/*.test.ts\" \"scripts/**/*.test.ts\"",
+    "test": "node --experimental-strip-types --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"lib/**/*.test.ts\" \"scripts/**/*.test.ts\"",
     "lint": "eslint"
   },
   "dependencies": {
