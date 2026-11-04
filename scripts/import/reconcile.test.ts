@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLines, checkLines, snapshotDelta, solveLines, type Refs } from './reconcile.ts'
+import { buildLines, candidateLines, checkLines, snapshotDelta, solveLines, type Refs } from './reconcile.ts'
 import { parseTags, parseAmounts } from './normalize.ts'
 
 const refs: Refs = {
@@ -118,4 +118,16 @@ test('waived with non-zero delta: waived flag plus warn', () => {
   const r2 = buildLines(parsed('200', '#無須支付'), { accounts: {}, storages: {} }, refs)
   assert.equal(r2.waived, true)
   assert.equal(r2.warn, undefined)
+})
+
+test('candidateLines: amounts and transfers without snapshot check; unresolved flagged', () => {
+  const c = candidateLines(parsed('1000\n+11000（會計專款）', '#匯入'), refs)
+  assert.equal(c.unresolved, false)
+  assert.deepEqual(c.lines, [
+    { account_id: 1, storage_id: 101, amount: 1000, label: null },
+    { account_id: 20, storage_id: 101, amount: 11000, label: '特殊專款' },
+  ])
+  const u = candidateLines(parsed('', '#「郵局」轉入「神秘專款」500元'), refs)
+  assert.equal(u.unresolved, true)
+  assert.deepEqual(u.lines, [])
 })

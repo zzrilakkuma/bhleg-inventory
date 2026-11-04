@@ -38,12 +38,12 @@ export function parseDate(
     return ' '
   })
   const note = notes.length ? notes.join(' ') : null
-  const m = rest.match(/(\d{4})\/(\d{1,2})(?:\/(\d{1,2})?)?/)
+  const m = rest.match(/(?<!\d)(\d{4})\/(\d{1,2})(?:\/(\d{1,2})?)?/)
   if (!m || +m[2] < 1 || +m[2] > 12) {
     return { occurred: prev, stated: null, note, warn: `unparseable date ${JSON.stringify(cell)}, using previous ${prev}` }
   }
   const ym = `${m[1]}-${pad(+m[2])}`
-  if (!m[3]) {
+  if (!m[3] || +m[3] === 0) {
     return { occurred: `${ym}-01`, stated: null, note, warn: `missing day in ${JSON.stringify(cell)}, using day 01` }
   }
   const iso = `${ym}-${pad(+m[3])}`

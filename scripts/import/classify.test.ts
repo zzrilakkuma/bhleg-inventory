@@ -117,3 +117,12 @@ test('opening incl. 二階實踐 variant', () => {
 test('unknown kind throws with kind text', () => {
   assert.throws(() => c({ kind: '怪類型' }), /怪類型/)
 })
+
+test('中央蘭室 gift (no 回注) is a non-member donor -> income/event', () => {
+  const r = c({
+    kind: '收入',
+    title: '中央蘭室 奉納\n4月 奉納金 \n（艾摩爾生日禮物 奉納）',
+    note: '#巢穴共同體成員奉納\n#中央蘭室 #艾摩爾 #Keiran \n#現金 #存放現金袋',
+  })
+  assert.deepEqual(r, { type: 'income', incomeSource: 'event', isMonthMarker: false })
+})

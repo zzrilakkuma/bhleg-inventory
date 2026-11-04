@@ -118,17 +118,9 @@ export function solveLines(delta: Delta, refs: Refs, hint: { storage: string | n
   return A
 }
 
-export function buildLines(parsed: Parsed, delta: Delta, refs: Refs): BuildResult {
+/** Lines implied by the row's own amounts and inline transfer tags, without any snapshot check. */
+export function candidateLines(parsed: Parsed, refs: Refs): { lines: Line[]; unresolved: boolean } {
   const { tags } = parsed
-  const isZero =
-    Object.values(delta.accounts).every((v) => v === 0) && Object.values(delta.storages).every((v) => v === 0)
-  if (tags.waived) {
-    const r: BuildResult = { lines: [], usedSolver: false, waived: true }
-    if (!isZero) r.warn = 'waived row has non-zero snapshot delta'
-    return r
-  }
-  if (tags.advancer && isZero) return { lines: [], usedSolver: false, offLedger: true }
-
   const accByName = new Map(refs.accounts.map((a) => [a.name, a]))
   const stoByName = new Map(refs.storages.map((s) => [s.name, s.id]))
   const accById = new Map(refs.accounts.map((a) => [a.id, a]))
@@ -174,8 +166,21 @@ export function buildLines(parsed: Parsed, delta: Delta, refs: Refs): BuildResul
     lines.push({ ...from, amount: -t.amount, label: null })
     lines.push({ ...to, amount: t.amount, label: null })
   }
+  return { lines: lines.filter((l) => l.amount !== 0), unresolved }
+}
 
-  const merged = lines.filter((l) => l.amount !== 0)
+export function buildLines(parsed: Parsed, delta: Delta, refs: Refs): BuildResult {
+  const { tags } = parsed
+  const isZero =
+    Object.values(delta.accounts).every((v) => v === 0) && Object.values(delta.storages).every((v) => v === 0)
+  if (tags.waived) {
+    const r: BuildResult = { lines: [], usedSolver: false, waived: true }
+    if (!isZero) r.warn = 'waived row has non-zero snapshot delta'
+    return r
+  }
+  if (tags.advancer && isZero) return { lines: [], usedSolver: false, offLedger: true }
+
+  const { lines: merged, unresolved } = candidateLines(parsed, refs)
   if (!unresolved && checkLines(merged, delta).ok) return { lines: merged, usedSolver: false }
   return { lines: solveLines(delta, refs, { storage: tags.storage, label: null }), usedSolver: true }
 }

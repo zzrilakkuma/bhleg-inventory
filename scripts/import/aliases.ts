@@ -23,6 +23,7 @@ export const MEMBER_ALIASES: Record<string, string> = {
   '懸&Colson': 'Colson&懸',
   巢穴夫夫: '柏萊赫夫夫',
   Yuyu: 'YUYU',
+  自在林: '小八', // 【自在林】代表 小八（吳佩姍） 奉納
 }
 
-export const NON_MEMBER_DONORS: string[] = ['佳凌', '匿名', 'Jessie', 'Lucy姊', 'Betty']
+export const NON_MEMBER_DONORS: string[] = ['佳凌', '匿名', 'Jessie', 'Lucy姊', 'Betty', '中央蘭室']

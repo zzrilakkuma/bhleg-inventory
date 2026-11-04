@@ -61,6 +61,16 @@ test('parseDate', () => {
   const z = parseDate('2026/1/15\n（歸零清算）', '2026-01-01')
   assert.equal(z.occurred, '2026-01-15')
   assert.equal(z.note, '歸零清算')
+  // day 0 (rows 417/418 `2025/7/0`) is a missing day, not an invalid ISO date
+  const d0 = parseDate('2025/7/0\n（延後結算）', '2026-01-28')
+  assert.equal(d0.occurred, '2025-07-01')
+  assert.equal(d0.stated, null)
+  assert.ok(d0.warn)
+  // row 236 typo `20257/4` must not parse as year 0257
+  const typo = parseDate('20257/4', '2025-07-03')
+  assert.equal(typo.occurred, '2025-07-03')
+  assert.equal(typo.stated, null)
+  assert.ok(typo.warn)
   const bad = parseDate('', '2026-11-03')
   assert.equal(bad.occurred, '2026-11-03')
   assert.equal(bad.stated, null)
