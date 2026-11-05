@@ -214,9 +214,9 @@ function Wizard() {
         )}
         <span>（章程 {dueDay} 日{late > 0 ? `，延後 ${late} 天` : ''}）</span>
       </div>
-      {dateTooEarly && <p className="text-[#FF0055] text-xs mt-1">{earlyMsg}</p>}
+      {dateTooEarly && <p role="alert" className="text-[#FF0055] text-xs mt-1">{earlyMsg}</p>}
 
-      <div className="mt-4 mb-5">
+      <div className="mt-4 mb-5" role="group" aria-label="結算步驟">
         <div className="flex gap-1">
           {STEPS.map((_, i) => (
             <div key={i} className={`flex-1 h-1 rounded ${i < step ? 'bg-[#00FF41]' : 'bg-[#222222]'}`} />
@@ -224,12 +224,12 @@ function Wizard() {
         </div>
         <div className="flex gap-1 mt-1 text-xs">
           {STEPS.map((s, i) => (
-            <div key={s} className={`flex-1 ${i + 1 === step ? 'text-[#00FF41]' : 'text-gray-500'}`}>{i + 1} {s}</div>
+            <div key={s} aria-current={i + 1 === step ? "step" : undefined} className={`flex-1 ${i + 1 === step ? 'text-[#00FF41]' : 'text-gray-500'}`}>{i + 1} {s}</div>
           ))}
         </div>
       </div>
 
-      {err && <p className="text-[#FF0055] text-sm mb-3">{err}</p>}
+      {err && <p role="alert" className="text-[#FF0055] text-sm mb-3">{err}</p>}
       {!refs && !err && <p className="text-gray-500 text-sm">載入中...</p>}
 
       {refs && step === 1 && (
@@ -251,7 +251,7 @@ function Wizard() {
       )}
       {refs && step === 3 && previewError && (
         <div>
-          <p className="text-[#FF0055] text-sm">無法產生預覽：{previewError}</p>
+          <p role="alert" className="text-[#FF0055] text-sm">無法產生預覽：{previewError}</p>
           <button type="button" onClick={() => setStep(2)}
             className="w-full sm:w-auto mt-4 px-6 py-3 rounded border border-[#333333] text-gray-300">上一步</button>
         </div>

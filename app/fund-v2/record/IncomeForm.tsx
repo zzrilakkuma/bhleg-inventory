@@ -38,6 +38,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
   const [source, setSource] = useState<IncomeSource>('donation');
   const [memberId, setMemberId] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
+  const [amtTouched, setAmtTouched] = useState(false);
   const [method, setMethod] = useState<'transfer' | 'cash'>('transfer');
   const [last5, setLast5] = useState('');
   const [handlerId, setHandlerId] = useState<number | null>(null);
@@ -145,7 +146,8 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
       )}
 
       <SectionLabel>金額</SectionLabel>
-      <input inputMode="numeric" value={amount} placeholder="0"
+      <input inputMode="numeric" value={amount} placeholder="0" onBlur={() => setAmtTouched(true)}
+        aria-invalid={amtTouched && !(Number(amount) > 0)}
         onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ''))}
         className={`${inputCls} text-2xl py-3 tabular-nums`} />
       {isDonation && (

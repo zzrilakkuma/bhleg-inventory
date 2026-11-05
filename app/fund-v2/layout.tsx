@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
-import { loadRole, RoleContext, type FundRole } from '@/lib/fund-v2/role';
+import { loadRole, resolveRoleOverride, RoleContext, type FundRole } from '@/lib/fund-v2/role';
 
 const TABS = [
   { href: '/fund-v2', label: '帳', accountantOnly: false },
@@ -14,11 +14,17 @@ const TABS = [
 
 export default function FundV2Layout({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<FundRole | null>(null);
+  const [preview, setPreview] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     let alive = true;
-    loadRole(supabase).then((r) => { if (alive) setRole(r); }).catch(() => { if (alive) setRole('member'); });
+    loadRole(supabase).then((r) => {
+      if (!alive) return;
+      const o = resolveRoleOverride(window.location.search, process.env.NODE_ENV);
+      setPreview(o === 'member');
+      setRole(o ?? r);
+    }).catch(() => { if (alive) setRole('member'); });
     return () => { alive = false; };
   }, []);
 
@@ -28,7 +34,7 @@ export default function FundV2Layout({ children }: { children: React.ReactNode }
   return (
     <RoleContext.Provider value={role}>
       <div className="min-h-screen bg-black text-white md:flex">
-        <aside className="hidden md:flex md:flex-col w-40 shrink-0 border-r border-[#333333] p-4 gap-1 sticky top-0 h-screen">
+        <aside aria-label="側欄" className="hidden md:flex md:flex-col w-40 shrink-0 border-r border-[#333333] p-4 gap-1 sticky top-0 h-screen">
           <Link href="/" className="text-xs text-gray-500 hover:text-white mb-4">← 首頁</Link>
           {tabs.map((t) => (
             <Link key={t.href} href={t.href}
@@ -42,11 +48,12 @@ export default function FundV2Layout({ children }: { children: React.ReactNode }
           </div>
         </aside>
         <main className="flex-1 min-w-0">
-          <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-20 md:pb-6">{children}</div>
+          {preview && <div className="bg-amber-500/10 border-b border-amber-500/50 text-amber-400 text-xs text-center py-1">以參與者身分預覽</div>}
+          <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-24 md:pb-6">{children}</div>
         </main>
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex border-t border-[#333333] bg-black">
+        <nav aria-label="主選單" className="md:hidden fixed bottom-0 inset-x-0 z-40 flex border-t border-[#333333] bg-black pb-[env(safe-area-inset-bottom)]">
           {tabs.map((t) => (
-            <Link key={t.href} href={t.href}
+            <Link key={t.href} href={t.href} aria-current={active(t.href) ? 'page' : undefined}
               className={`flex-1 py-3 text-center text-base ${active(t.href) ? 'text-[#00FF41]' : 'text-gray-400'}`}>
               {t.label}
             </Link>

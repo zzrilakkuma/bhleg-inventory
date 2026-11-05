@@ -47,7 +47,7 @@ export default function LedgerList({ rows, refs, isAccountant, hasEarlier, onLoa
               const open = openId === r.id;
               return (
                 <div key={r.id} className="border-b border-[#1a1a1a]">
-                  <button type="button" onClick={() => setOpenId(open ? null : r.id)}
+                  <button type="button" aria-expanded={open} onClick={() => setOpenId(open ? null : r.id)}
                     className="w-full text-left grid grid-cols-[3rem_1fr_auto_auto] md:grid-cols-[5rem_1fr_auto_auto] gap-x-3 items-baseline px-1 py-3 hover:bg-[#0f0f0f]">
                     <span className="text-xs text-gray-500 tabular-nums">{md(dateOf(r))}</span>
                     <span className="min-w-0 text-sm text-white truncate">

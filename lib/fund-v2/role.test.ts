@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadRole } from './role.ts';
+import { loadRole, resolveRoleOverride } from './role.ts';
 
 const makeClient = (uid: string | null, rows: { role: string }[] | null, error: unknown = null) => {
   const q: any = {
@@ -26,4 +26,12 @@ test('loadRole: member row -> member', async () => {
 test('loadRole: no user or query error -> member', async () => {
   assert.equal(await loadRole(makeClient(null, null)), 'member');
   assert.equal(await loadRole(makeClient('u1', null, new Error('x'))), 'member');
+});
+
+test('resolveRoleOverride: only development + as=member', () => {
+  assert.equal(resolveRoleOverride('?as=member', 'development'), 'member');
+  assert.equal(resolveRoleOverride('?as=member', 'production'), null);
+  assert.equal(resolveRoleOverride('?as=member', 'test'), null);
+  assert.equal(resolveRoleOverride('', 'development'), null);
+  assert.equal(resolveRoleOverride('?as=accountant', 'development'), null);
 });

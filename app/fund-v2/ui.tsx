@@ -16,7 +16,7 @@ export function Card({ children, className = '' }: { children: React.ReactNode; 
 
 export function Chip({ on, onClick, children }: { on?: boolean; onClick?: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} aria-pressed={on === undefined ? undefined : on}
       className={`px-3 py-2 rounded border text-sm transition-colors ${
         on ? 'border-[#00FF41] text-[#00FF41] bg-[rgba(0,255,65,0.1)]' : 'border-[#333333] text-gray-400 hover:border-[#555555]'}`}>
       {children}

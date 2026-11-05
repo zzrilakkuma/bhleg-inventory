@@ -61,7 +61,7 @@ export default function LedgerPage() {
           </select>
         )}
       </div>
-      {err && <p className="text-[#FF0055] text-sm mb-3">{err}</p>}
+      {err && <p role="alert" className="text-[#FF0055] text-sm mb-3">{err}</p>}
       {snap === undefined && !err && <p className="text-gray-500 text-sm">載入中...</p>}
       {snap && <BalanceCard snap={snap} refs={refs} />}
       {snap === null && <p className="text-gray-500 text-sm">尚無交易</p>}

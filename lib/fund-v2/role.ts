@@ -17,3 +17,9 @@ export const loadRole = async (client: SupabaseClient): Promise<FundRole> => {
 /** null = 尚在載入 */
 export const RoleContext = createContext<FundRole | null>(null);
 export const useRole = () => useContext(RoleContext);
+
+/** 僅開發環境：?as=member 讓會計預覽參與者畫面。production 一律回 null。 */
+export const resolveRoleOverride = (search: string, env: string): 'member' | null => {
+  if (env !== 'development') return null;
+  return new URLSearchParams(search).get('as') === 'member' ? 'member' : null;
+};

@@ -54,7 +54,7 @@ export default function FreezeStep({
           <span className="text-sm text-gray-400">凍存後不凍結零用金</span>
           <Amount value={main - r - f} size="lg" />
         </div>
-        {over && <p className="text-[#FF0055] text-xs mt-1">凍存超過零用金</p>}
+        {over && <p role="alert" className="text-[#FF0055] text-xs mt-1">凍存超過零用金</p>}
       </Card>
       <p className="text-xs text-gray-500 mt-3">
         章程：總餘款 {pct}%（小結 × {pct}% = <span className="tabular-nums">{fmtAmount(charterTotal)}</span>）

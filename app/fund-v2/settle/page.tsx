@@ -66,7 +66,7 @@ export default function SettlePage() {
   return (
     <div>
       <h1 className="text-xl font-bold mb-4">算</h1>
-      {err && <p className="text-[#FF0055] text-sm mb-3">{err}</p>}
+      {err && <p role="alert" className="text-[#FF0055] text-sm mb-3">{err}</p>}
       {!data && !err && <p className="text-gray-500 text-sm">載入中...</p>}
       {data && view && (
         <>

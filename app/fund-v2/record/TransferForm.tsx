@@ -22,6 +22,7 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
   const [fromKey, setFromKey] = useState<string | null>(null);
   const [toKey, setToKey] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
+  const [amtTouched, setAmtTouched] = useState(false);
   const [ref, setRef] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -77,7 +78,8 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
       </div>
 
       <SectionLabel>金額</SectionLabel>
-      <input inputMode="numeric" value={amount} placeholder="0"
+      <input inputMode="numeric" value={amount} placeholder="0" onBlur={() => setAmtTouched(true)}
+        aria-invalid={amtTouched && !(Number(amount) > 0)}
         onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ''))}
         className={`${inputCls} text-2xl py-3 tabular-nums`} />
 
@@ -88,7 +90,7 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
         </>
       )}
 
-      {error && <p className="text-[#FF0055] text-sm mt-3">{error}</p>}
+      {error && <p role="alert" className="text-[#FF0055] text-sm mt-3">{error}</p>}
 
       {preview && (
         <Card className="mt-4">

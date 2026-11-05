@@ -116,7 +116,7 @@ export default function ClaimStep({
           )}
         </>
       )}
-      {over && <p className="text-[#FF0055] text-sm mt-2">{over.loan.lender_name} 還款超過剩餘</p>}
+      {over && <p role="alert" className="text-[#FF0055] text-sm mt-2">{over.loan.lender_name} 還款超過剩餘</p>}
 
       <Summary snapshot={snapshot} delta={delta} />
       <StepNav onNext={onNext} busy={busy} disabled={!!over || !storageId} />

@@ -40,7 +40,7 @@ export default function StatsPage() {
   const salon = useMemo(() => salonByPeriod(rows), [rows]);
   const today = todayISO();
 
-  if (err) return <div className="text-[#FF0055] text-sm">載入失敗：{err}</div>;
+  if (err) return <div role="alert" className="text-[#FF0055] text-sm">載入失敗：{err}</div>;
   if (!all) return <div className="text-gray-500 text-sm">載入中...</div>;
 
   return (
