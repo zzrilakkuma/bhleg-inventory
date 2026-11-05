@@ -13,9 +13,9 @@ const SPANS = [6, 12] as const;
 
 const CellView = ({ c }: { c: Cell }) => {
   if (c.state === 'paid') return <span className="font-mono tabular-nums text-white">{fmtAmount(c.amount)}</span>;
-  if (c.state === 'covered') return <span aria-label="已含在另一筆奉納" className="text-[#00FF41]">✓</span>;
+  if (c.state === 'covered') return <span role="img" aria-label="已含在另一筆奉納" className="text-[#00FF41]">✓</span>;
   if (c.state === 'unpaid') return <span role="img" aria-label="未繳" className="inline-block w-2 h-2 rounded-full bg-[#FF0055]" />;
-  return <span className="text-gray-600">·</span>;
+  return <span role="img" aria-label="不在籍或未到期" className="text-gray-600">·</span>;
 };
 
 export default function MonthlyPage() {
@@ -31,8 +31,12 @@ export default function MonthlyPage() {
       .catch((e) => setErr(String(e?.message ?? e)));
   }, []);
   useEffect(() => {
-    setRows(null);
-    getDonationsForMonths(supabase, months).then(setRows).catch((e) => setErr(String(e?.message ?? e)));
+    let stale = false;
+    setRows(null); setErr(null);
+    getDonationsForMonths(supabase, months)
+      .then((r) => { if (!stale) setRows(r); })
+      .catch((e) => { if (!stale) setErr(String(e?.message ?? e)); });
+    return () => { stale = true; };
   }, [months]);
 
   const grid = useMemo(
@@ -45,7 +49,7 @@ export default function MonthlyPage() {
   }, 0)), [grid, months]);
 
   if (err) return <div role="alert" className="text-[#FF0055] text-sm">載入失敗：{err}</div>;
-  if (!members || !rows) return <div className="text-gray-500 text-sm">載入中...</div>;
+  const loading = !members || !rows;
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -53,6 +57,7 @@ export default function MonthlyPage() {
       <div className="flex flex-wrap gap-2">
         {SPANS.map((n) => <Chip key={n} on={span === n} onClick={() => setSpan(n)}>{n} 個月</Chip>)}
       </div>
+      {loading ? <div className="text-gray-500 text-sm">載入中...</div> : (
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
@@ -79,6 +84,7 @@ export default function MonthlyPage() {
           </table>
         </div>
       </Card>
+      )}
       <p className="text-xs text-gray-500">✓ 已含在另一筆奉納（一次繳多個月時，金額記在收款那個月）</p>
     </div>
   );

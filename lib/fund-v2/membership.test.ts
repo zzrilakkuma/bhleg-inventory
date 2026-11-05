@@ -80,3 +80,28 @@ test('donationGrid：截止日 31 在短月視為月底；空 months 只涵蓋�
   assert.deepEqual(donationGrid(ms, ['2026-01', '2026-02'], legacy, '2026-02-20', 14)[0].cells,
     [{ state: 'unpaid' }, { state: 'paid', amount: 1500 }]);
 });
+
+test('donationGrid：記入月在顯示範圍外時，範圍內的涵蓋月只顯示 covered', () => {
+  const ms = [{ id: 1, nickname: 'A', sort_order: 1, active: true, joined_at: null, left_at: null }] as FundMember[];
+  const rows = [{ member_id: 1, months: ['2025-12', '2026-01'], amount: 3000, paid_on: '2026-03-02' }];
+  const g = donationGrid(ms, ['2026-01', '2026-02'], rows, '2026-03-20', 14);
+  assert.deepEqual(g[0].cells, [{ state: 'covered' }, { state: 'unpaid' }]);
+});
+test('donationGrid：退出後的月份為 na；整段範圍前已退出者不列出', () => {
+  const ms = [
+    { id: 1, nickname: 'A', sort_order: 1, active: false, joined_at: null, left_at: '2026-02-10' },
+    { id: 2, nickname: 'Old', sort_order: 2, active: false, joined_at: null, left_at: '2025-06-01' },
+  ] as FundMember[];
+  const g = donationGrid(ms, ['2026-01', '2026-02', '2026-03'], [], '2026-06-20', 14);
+  assert.equal(g.length, 1);
+  assert.deepEqual(g[0].cells, [{ state: 'unpaid' }, { state: 'unpaid' }, { state: 'na' }]);
+});
+test('donationGrid：涵蓋退出後或加入前月份的奉納仍顯示 paid/covered', () => {
+  const ms = [{ id: 1, nickname: 'A', sort_order: 1, active: false, joined_at: '2026-02-01', left_at: '2026-03-15' }] as FundMember[];
+  const rows = [
+    { member_id: 1, months: ['2026-01', '2026-02'], amount: 2000, paid_on: '2026-01-20' },
+    { member_id: 1, months: ['2026-04'], amount: 1000, paid_on: '2026-04-02' },
+  ];
+  const g = donationGrid(ms, ['2026-01', '2026-02', '2026-03', '2026-04'], rows, '2026-06-20', 14);
+  assert.deepEqual(g[0].cells, [{ state: 'paid', amount: 2000 }, { state: 'covered' }, { state: 'unpaid' }, { state: 'paid', amount: 1000 }]);
+});

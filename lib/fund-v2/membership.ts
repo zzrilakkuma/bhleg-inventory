@@ -54,6 +54,7 @@ export const donationGrid = (
     const payMonth = r.paid_on.slice(0, 7);
     const cover = r.months.length ? r.months : [payMonth];
     const booked = cover.includes(payMonth) ? payMonth : cover[0];
+    // 規則：金額留在它被記入的月份，即使該月在顯示範圍外（各月合計不隨所選期間改變）；範圍內其餘涵蓋月只顯示 ✓。
     const k = `${r.member_id}|${booked}`;
     paid.set(k, (paid.get(k) ?? 0) + r.amount);
     for (const m of cover) if (m !== booked) covered.add(`${r.member_id}|${m}`);
