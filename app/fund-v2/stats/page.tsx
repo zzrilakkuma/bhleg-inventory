@@ -50,6 +50,8 @@ export default function StatsPage() {
         {rangeOptions.map((r) => <Chip key={r} on={range === r} onClick={() => setRange(r)}>{r}</Chip>)}
       </div>
 
+      <Link href="/fund-v2/monthly" className="block text-sm text-[#00FF41]">每月奉納一覽 →</Link>
+
       <Card>
         <SectionLabel>小結 vs 零用金</SectionLabel>
         <LineChart series={series} />
