@@ -1,12 +1,15 @@
 // 算首頁「要做的事」：純函式。
 import { monthLabel, type FundMember } from '../fund.ts';
+import { dayInMonth } from './settings.ts';
+import { membersInMonth } from './membership.ts';
 
 export interface PayableLike { id: number; title: string; amount: number; due_on: string | null }
 export interface DuePayable<P extends PayableLike = PayableLike> { payable: P; overdue: boolean }
 export type TodoItem<P extends PayableLike = PayableLike> =
   | { kind: 'payable'; payable: P; overdue: boolean }
   | { kind: 'unclaimed'; count: number; sum: number }
-  | { kind: 'unpaid'; count: number };
+  | { kind: 'unpaid'; count: number }
+  | { kind: 'group_due'; names: string[] };
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -15,10 +18,10 @@ export const unpaidMembers = (
   members: FundMember[], donationsThisMonth: { member_id: number | null; months: string[] }[],
   today: Date, dueDay: number,
 ): FundMember[] => {
-  if (today.getDate() <= dueDay) return [];
   const month = ymd(today).slice(0, 7);
+  if (today.getDate() <= dayInMonth(month, dueDay)) return [];
   const paid = new Set(donationsThisMonth.filter((d) => d.months.includes(month)).map((d) => d.member_id));
-  return members.filter((x) => x.active && !paid.has(x.id));
+  return membersInMonth(members, month).filter((x) => !paid.has(x.id));
 };
 
 export const duePayables = <P extends PayableLike>(payables: P[], today: Date): DuePayable<P>[] => {
@@ -35,12 +38,25 @@ export const duePayables = <P extends PayableLike>(payables: P[], today: Date): 
 };
 
 export const todoItems = <P extends PayableLike>(i: {
-  payables: DuePayable<P>[]; unclaimed: { amount: number }[]; unpaid: FundMember[];
+  payables: DuePayable<P>[]; unclaimed: { amount: number }[]; unpaid: FundMember[]; groupDue?: string[];
 }): TodoItem<P>[] => {
   const out: TodoItem<P>[] = i.payables.map((p) => ({ kind: 'payable', payable: p.payable, overdue: p.overdue }));
   if (i.unclaimed.length) out.push({ kind: 'unclaimed', count: i.unclaimed.length, sum: i.unclaimed.reduce((s, e) => s + e.amount, 0) });
   if (i.unpaid.length) out.push({ kind: 'unpaid', count: i.unpaid.length });
+  if (i.groupDue?.length) out.push({ kind: 'group_due', names: i.groupDue });
   return out;
+};
+
+/** 今天（YYYY-MM-DD）已過截止日時，列出上個月沒有彙整交易的 active 小組科目 */
+export const groupsMissingSummary = (
+  groups: { id: number; name: string; active: boolean; kind: string }[],
+  summaries: { group_id: number | null; title: string }[], today: string, dueDay: number,
+): string[] => {
+  const month = today.slice(0, 7);
+  if (Number(today.slice(8, 10)) <= dayInMonth(month, dueDay)) return [];
+  const prev = Number(month.slice(5, 7)) === 1 ? 12 : Number(month.slice(5, 7)) - 1;
+  const done = new Set(summaries.filter((s) => s.title.includes(` ${prev}月 `)).map((s) => s.group_id));
+  return groups.filter((g) => g.active && g.kind === 'group' && !done.has(g.id)).map((g) => g.name);
 };
 
 export const unpaidListText = (members: FundMember[], month: string): string =>

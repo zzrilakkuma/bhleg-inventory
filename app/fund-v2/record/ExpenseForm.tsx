@@ -8,8 +8,9 @@ import { insertTransaction } from '@/lib/fund-db';
 import { fmtAmount, TAG_GROUP_LABEL, type FundExpense, type FundTag, type FundTemplate } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
 import { markPayablePaid } from '@/lib/fund-v2/payable';
+import { backdateWarning } from '@/lib/fund-v2/ledger';
 import { nextSeq } from '@/lib/fund-v2/seq';
-import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, selectableStorages } from '@/lib/fund-v2/expense';
+import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, chipPayableId, chipAction, selectableStorages } from '@/lib/fund-v2/expense';
 import { Chip, SectionLabel } from '../ui';
 import { WaiveSheet, GroupSummarySheet } from './ExpenseSheets';
 
@@ -22,12 +23,13 @@ const ADVANCE = 'advance';
 
 type RecentExpense = FundExpense;
 
-export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
+export default function ExpenseForm({ refs, lastSettledOn, onSaved }: { refs: Refs; lastSettledOn: string | null; onSaved: () => void }) {
   const router = useRouter();
   const urlPayableId = Number(useSearchParams().get('payable')) || null;
   // 標記失敗後脫離該筆應付；只對失敗的那個 payable id 生效，換新的 ?payable 即恢復
   const [detachedFrom, setDetachedFrom] = useState<number | null>(null);
   const payableId = urlPayableId !== null && detachedFrom === urlPayableId ? null : urlPayableId;
+  const failedPayables = useRef<Set<number>>(new Set()); // 本頁標記失敗過的應付，chip 不再接上（不隨 ?payable 變動清除）
   const mainAccount = refs.accounts.find((a) => a.kind === 'main') ?? refs.accounts[0];
   const advancers = refs.advancers.filter((a) => a.active);
 
@@ -82,11 +84,20 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
     for (const e of recent) if (e.vendor && !seen.has(e.vendor)) { seen.add(e.vendor); out.push(e.vendor); }
     return out;
   }, [recent]);
+  // 本月、該範本的 open 應付：點「常用」時改走 ?payable=ID 的既有預填流程（不另開標記已付的路徑）
+  const [openPayables, setOpenPayables] = useState<{ id: number; template_id: number | null }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    supabase.from('fund_payables').select('id, template_id').eq('status', 'open').eq('for_month', curMonth)
+      .then((r) => { if (alive && !r.error) setOpenPayables((r.data ?? []) as { id: number; template_id: number | null }[]); });
+    return () => { alive = false; };
+  }, [curMonth, urlPayableId]); // ?payable 變動（含儲存後被清掉）時重讀，避免留下已付的舊項
   const templates = useMemo(() => pendingRecurring(refs.templates, monthExp, curMonth), [refs.templates, monthExp, curMonth]);
 
   // ?payable=ID：以應付（與其範本）預填
   const [payErr, setPayErr] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState<number | null>(null);
+  const [payableTitle, setPayableTitle] = useState<{ id: number; title: string } | null>(null);
   // 開啟新的 ?payable 時清掉上一筆的失敗狀態（失敗後 URL 被清成 null 時保留紅框直到「知道了」）
   const prevUrlPayable = useRef(urlPayableId);
   useEffect(() => {
@@ -102,6 +113,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
       if (error || !p) { toast.error(error?.message ?? '找不到這筆應付'); return; }
       if (p.status !== 'open') { toast.error('這筆應付已處理'); return; }
       const t = p.template_id != null ? refs.templates.find((x) => x.id === p.template_id) : undefined;
+      setPayableTitle({ id: p.id, title: p.title ?? t?.name ?? `#${p.id}` });
       const v = p.vendor ?? t?.vendor ?? '';
       setVendor(v); setAmount(String(Math.round(Number(p.amount))));
       setDescription((t?.description ?? p.title ?? '').replace(/N月/g, `${Number(today().slice(5, 7))}月`));
@@ -179,11 +191,13 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
         const r = await markPayablePaid(supabase, payableId, saved.id);
         if (!r.ok) {
           setDetachedFrom(payableId);
+          failedPayables.current.add(payableId);
           setPayErr(`已記帳（交易 #${saved.id}），但應付 #${payableId} 沒有標記為已付：${r.reason}。請到應付頁手動處理，勿重複記帳。`);
           router.replace('/fund-v2/record'); // 避免重新整理後以空白表單再次觸發標記
           reset(); onSaved(); loadLists();
           return;
         }
+        setOpenPayables((ps) => ps.filter((x) => x.id !== payableId));
         router.replace('/fund-v2/record');
       }
       setPayErr(null);
@@ -212,7 +226,14 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           <SectionLabel>常用</SectionLabel>
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
-              <Chip key={t.id} onClick={() => applyTemplate(t)}>
+              <Chip key={t.id} onClick={() => {
+                const pid = chipPayableId(t, openPayables, detachedFrom, payErr !== null, failedPayables.current);
+                const act = chipAction(pid, payableId, urlPayableId);
+                if (act === 'noop') return; // 已接著這筆應付：不以範本預設覆寫其預填
+                applyTemplate(t); // 先套範本（含出款科目／墊款人），再由 ?payable 預填覆寫 vendor／金額／說明／標籤
+                if (act === 'attach') router.replace(`/fund-v2/record?payable=${pid}`);
+                else if (act === 'detach') router.replace('/fund-v2/record'); // 這個範本沒有應付：放開網址上的別筆，免得存檔標錯
+              }}>
                 {t.name}{t.default_amount != null ? ` ${fmtAmount(Number(t.default_amount))}` : ''}
               </Chip>
             ))}
@@ -267,6 +288,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={inputCls} />
           <SectionLabel>日期</SectionLabel>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value || today())} className={inputCls} />
+          {(() => { const w = backdateWarning(date, lastSettledOn); return w ? <p className="text-xs text-yellow-400 mt-1">{w}</p> : null; })()}
           <SectionLabel>科目</SectionLabel>
           {from === ADVANCE ? (
             <div className="text-xs text-gray-500">代墊請款一律入不凍結零用金</div>
@@ -289,6 +311,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           ? '帳外（先墊付）：0'
           : preview === 0 ? '本筆對不凍結零用金：0' : `本筆對不凍結零用金：−${fmtAmount(Math.abs(preview))}`}
       </div>
+      {payableId !== null && payableTitle?.id === payableId && <p className="mt-2 text-xs text-gray-500">存檔後會把應付「{payableTitle.title}」標記為已付</p>}
       <button type="button" disabled={!ready || busy || !!payErr} onClick={submit}
         className="w-full mt-2 py-3 rounded border border-[#00FF41] text-[#00FF41] text-base disabled:opacity-40">
         {busy ? '寫入中...' : '記下'}

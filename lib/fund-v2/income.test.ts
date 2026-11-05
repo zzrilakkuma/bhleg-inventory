@@ -9,7 +9,7 @@ const kitchen: FundAccount = { id: 5, name: '廚房', kind: 'group', default_sto
 const post: FundStorage = { id: 10, name: '郵局', active: true, sort_order: 1 };
 const cash: FundStorage = { id: 11, name: '現金', active: true, sort_order: 2 };
 const refs = { accounts: [main, kitchen], storages: [post, cash] } as unknown as Refs;
-const mem: FundMember = { id: 7, nickname: '小明', real_name: null, role: '巢穴人', default_last5: '12345', active: true, sort_order: 1, joined_at: null, left_at: null, exit_note: null };
+const mem: FundMember = { id: 7, nickname: '小明', real_name: null, role: '巢穴人', default_last5: '12345', active: true, sort_order: 1, joined_at: null, left_at: null, exit_note: null, user_id: null };
 const hnd: FundHandler = { id: 2, name: '阿美', active: true, sort_order: 1 };
 const base = { date: '2026-11-05', method: 'transfer' as const, storage: post, allocations: [], months: ['2026-11'], refs, seq: 3 };
 

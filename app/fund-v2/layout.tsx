@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
+import EmergencyBanner from './EmergencyBanner';
 import { loadRole, resolveRoleOverride, RoleContext, type FundRole } from '@/lib/fund-v2/role';
 
 const TABS = [
@@ -44,11 +45,12 @@ export default function FundV2Layout({ children }: { children: React.ReactNode }
           ))}
           <div className="mt-4 flex flex-col gap-1 text-xs">
             <Link href="/fund-v2/stats" aria-current={active('/fund-v2/stats') ? 'page' : undefined} className={`px-3 py-1 ${active('/fund-v2/stats') ? 'text-[#00FF41]' : 'text-gray-500 hover:text-white'}`}>統計</Link>
-            <Link href="/fund/manage" className="px-3 py-1 text-gray-500 hover:text-white">設定</Link>
+            <Link href="/fund-v2/settings" className="px-3 py-1 text-gray-500 hover:text-white">設定</Link>
           </div>
         </aside>
         <main className="flex-1 min-w-0">
           {preview && <div className="bg-amber-500/10 border-b border-amber-500/50 text-amber-400 text-xs text-center py-1">以參與者身分預覽</div>}
+          <EmergencyBanner />
           <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-24 md:pb-6">{children}</div>
         </main>
         <nav aria-label="主選單" className="md:hidden fixed bottom-0 inset-x-0 z-40 flex border-t border-[#333333] bg-black pb-[env(safe-area-inset-bottom)]">

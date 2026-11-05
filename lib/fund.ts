@@ -11,6 +11,7 @@ export interface FundMember {
   joined_at: string | null;
   left_at: string | null;
   exit_note: string | null;
+  user_id: string | null;
 }
 
 export interface FundHandler { id: number; name: string; active: boolean; sort_order: number }

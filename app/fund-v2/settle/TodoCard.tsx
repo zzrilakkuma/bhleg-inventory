@@ -41,9 +41,18 @@ export default function TodoCard({ items, isAccountant, copyText }: {
               </li>
             );
           }
+          if (it.kind === 'group_due') {
+            return (
+              <li key={`g${i}`}>
+                {isAccountant
+                  ? <Link href="/fund-v2/record" className="block py-2 text-sm text-white">上個月尚未彙整：{it.names.join('、')}</Link>
+                  : <span className="block py-2 text-sm text-white">上個月尚未彙整：{it.names.join('、')}</span>}
+              </li>
+            );
+          }
           return (
             <li key={`n${i}`} className="flex items-center justify-between py-2 text-sm text-white">
-              <span>未繳 {it.count} 人</span>
+              <Link href="/fund-v2/monthly" className="flex-1 py-1">未繳 {it.count} 人</Link>
               {isAccountant && (
                 <button type="button" onClick={copy} className="px-3 py-2 rounded border border-[#333333] text-xs text-gray-300 hover:border-[#00FF41]">
                   複製名單

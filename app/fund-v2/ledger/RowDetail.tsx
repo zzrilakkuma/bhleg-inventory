@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { formatSnapshot, SUBTYPE_LABEL } from '@/lib/fund';
 import { updateTransaction, deleteTransaction } from '@/lib/fund-db';
 import type { LedgerRow, Refs } from '@/lib/fund-v2/api';
-import { buildEditPatch, dateOf } from '@/lib/fund-v2/ledger';
+import { buildEditPatch, dateOf, deleteErrorText } from '@/lib/fund-v2/ledger';
 import { Chip } from '../ui';
 
 const CLAIM_LABEL: Record<string, string> = { unclaimed: '待請款', claimed: '已請款', waived: '放棄請款' };
@@ -40,7 +40,7 @@ export default function RowDetail({ row, refs, isAccountant, onChanged }: {
     if (!window.confirm(`確定刪除「${row.title.split('\n')[0]}」？此操作無法復原。${extra}`)) return;
     setBusy(true);
     try { await deleteTransaction(row.id); toast.success('已刪除'); onChanged(); }
-    catch (e) { toast.error(String((e as Error).message ?? e)); } finally { setBusy(false); }
+    catch (e) { toast.error(deleteErrorText(e)); } finally { setBusy(false); }
   };
 
   const inp = 'w-full bg-black border border-[#333333] rounded px-2 py-2 text-sm text-white';

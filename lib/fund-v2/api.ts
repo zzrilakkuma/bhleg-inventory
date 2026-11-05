@@ -1,5 +1,6 @@
 // 計畫 B 讀取層。所有函式第一個參數為 client（測試可傳假 client）。
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { DonationRow } from './membership.ts';
 import type {
   FundAccount, FundAdvancer, FundHandler, FundMember, FundStorage, FundTag, FundTemplate,
   FundTransactionType, ClaimStatus,
@@ -164,4 +165,23 @@ export const getWaivedTotal = async (client: SupabaseClient): Promise<number> =>
   const { data, error } = await client.from('fund_waived_total').select('total').maybeSingle();
   if (error) throw error;
   return num(data?.total ?? 0);
+};
+
+/**
+ * 涵蓋任一指定月份的奉納。fund_donations 只有一條 FK 指向 fund_transactions，embed 不需 hint。
+ * 12 個月視窗遠低於 PostgREST 的 1000 列上限，不需分頁。
+ * 注意：months 為空陣列的列不會被 overlaps 命中（匯入的奉納都有 months，可接受）。
+ */
+export const getDonationsForMonths = async (client: SupabaseClient, months: string[]): Promise<DonationRow[]> => {
+  const rows = unwrap<any[]>(await client.from('fund_donations')
+    .select('member_id, months, fund_transactions(amount, occurred_on, stated_on)')
+    .overlaps('months', months));
+  return rows.flatMap((r) => {
+    const t = Array.isArray(r.fund_transactions) ? r.fund_transactions[0] : r.fund_transactions;
+    if (!t) return [];
+    return [{
+      member_id: r.member_id == null ? null : num(r.member_id), months: r.months ?? [],
+      amount: num(t.amount), paid_on: t.stated_on ?? t.occurred_on,
+    }];
+  });
 };

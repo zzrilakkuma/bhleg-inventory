@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  pendingRecurring, guessTags, buildExpenseWrite, expenseImpact, buildGroupSummaryWrite, groupSummaryDefaultDate,
+  pendingRecurring, chipPayableId, chipAction, guessTags, buildExpenseWrite, expenseImpact, buildGroupSummaryWrite, groupSummaryDefaultDate,
 } from './expense.ts';
 import type { FundTemplate, FundExpense, FundAccount, FundStorage, FundAdvancer } from '../fund.ts';
 import type { Refs } from './api.ts';
@@ -106,4 +106,24 @@ test('selectableStorages: main -> 郵局/現金; group adds bags; 待清償 neve
   assert.deepEqual(selectableStorages(all, { kind: 'main', default_storage_id: 1 }).map((s) => s.name), ['郵局', '現金']);
   assert.deepEqual(selectableStorages(all, { kind: 'group', default_storage_id: 3 }).map((s) => s.name), ['郵局', '現金', '現金（廚房）', '現金（沙龍）']);
   assert.ok(!selectableStorages(all, { kind: 'special', default_storage_id: 9 }).some((s) => /待清償/.test(s.name)));
+});
+
+test('chipPayableId', () => {
+  const ps = [{ id: 9, template_id: 1 }, { id: 10, template_id: null }];
+  assert.equal(chipPayableId({ id: 1 }, ps, null, false), 9);
+  assert.equal(chipPayableId({ id: 2 }, ps, null, false), null);
+  assert.equal(chipPayableId({ id: 1 }, ps, 9, false), null);
+  assert.equal(chipPayableId({ id: 1 }, ps, 8, false), 9);
+  assert.equal(chipPayableId({ id: 1 }, ps, null, true), null);
+  assert.equal(chipPayableId({ id: 1 }, ps, null, false, new Set([9])), null);
+  assert.equal(chipPayableId({ id: 1 }, ps, null, false, new Set([7])), 9);
+});
+
+test('chipAction', () => {
+  assert.equal(chipAction(9, 9, 9), 'noop');
+  assert.equal(chipAction(9, null, null), 'attach');
+  assert.equal(chipAction(9, 8, 8), 'attach');
+  assert.equal(chipAction(null, 8, 8), 'detach');
+  assert.equal(chipAction(null, null, 8), 'detach'); // 已脫離但網址仍掛著
+  assert.equal(chipAction(null, null, null), 'template');
 });

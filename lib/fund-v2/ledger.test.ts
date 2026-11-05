@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildEditPatch, groupByDate, rowSummary, pageWindow, categoryOf } from './ledger.ts';
+import { buildEditPatch, groupByDate, rowSummary, pageWindow, categoryOf, backdateWarning, deleteErrorText } from './ledger.ts';
 import type { LedgerRow, FundPeriod } from './api.ts';
 
 const row = (o: Partial<LedgerRow>): LedgerRow => ({
@@ -70,4 +70,18 @@ test('buildEditPatch: date change sets both keys', () => {
   const p = buildEditPatch(o, { ...o, date: '2026-10-08' });
   assert.equal(p.occurred_on, '2026-10-08');
   assert.equal(p.stated_on, '2026-10-08');
+});
+
+test('backdateWarning', () => {
+  assert.equal(backdateWarning('2026-11-05', '2026-11-03'), null);
+  assert.equal(backdateWarning('2026-11-03', '2026-11-03'), null);
+  assert.equal(backdateWarning('2026-10-28', '2026-11-03'), '這個日期早於上次結算（2026/11/3），已公布的數字會跟著變動');
+  assert.equal(backdateWarning('2026-10-28', null), null);
+});
+
+test('deleteErrorText', () => {
+  assert.equal(deleteErrorText({ message: '這筆借款已有還款紀錄，請先刪除還款' }), '這筆借款已有還款紀錄，請先刪除還款');
+  assert.equal(deleteErrorText({ message: '這筆代墊已請款，請先刪除請款交易' }), '這筆代墊已請款，請先刪除請款交易');
+  assert.equal(deleteErrorText({ message: 'boom' }), '刪除失敗：boom');
+  assert.equal(deleteErrorText('oops'), '刪除失敗：oops');
 });

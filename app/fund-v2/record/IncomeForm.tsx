@@ -5,10 +5,13 @@ import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
 import { insertTransaction } from '@/lib/fund-db';
 import {
-  fmtAmount, INCOME_SOURCE_LABEL, memberDisplayName, MONTHLY_CAP, recentMonths, STANDARD_AMOUNT,
+  fmtAmount, INCOME_SOURCE_LABEL, memberDisplayName, recentMonths,
   monthLabel, type IncomeSource,
 } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
+import { backdateWarning } from '@/lib/fund-v2/ledger';
+import { parseSettings } from '@/lib/fund-v2/settings';
+import { inMonth } from '@/lib/fund-v2/membership';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { selectableStorages } from '@/lib/fund-v2/expense';
 import { allocationLines, buildIncomeWrite, monthlyCapWarning } from '@/lib/fund-v2/income';
@@ -22,16 +25,15 @@ const inputCls = 'w-full bg-black border border-[#333333] rounded px-3 py-2 text
 const SOURCES: IncomeSource[] = ['donation', 'salon', 'event', 'kitchen', 'reinject', 'loan', 'other'];
 const SOURCE_CHIP: Partial<Record<IncomeSource, string>> = { reinject: '回注' };
 
-export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
+export default function IncomeForm({ refs, lastSettledOn, onSaved }: { refs: Refs; lastSettledOn: string | null; onSaved: () => void }) {
   const mainAccount = refs.accounts.find((a) => a.kind === 'main');
-  const members = useMemo(() => refs.members.filter((m) => m.active), [refs.members]);
   const handlers = useMemo(() => refs.handlers.filter((h) => h.active), [refs.handlers]);
   const specials = useMemo(
     () => refs.accounts.filter((a) => a.active && (a.kind === 'group' || a.kind === 'special')), [refs.accounts]);
   const storages = useMemo(() => selectableStorages(refs.storages, mainAccount), [refs.storages, mainAccount]);
   const post = storages.find((s) => s.name === '郵局');
   const cashSt = storages.find((s) => s.name === '現金');
-  const cap = Number(refs.settings.monthly_cap) || MONTHLY_CAP;
+  const { monthly_cap: cap, standard_amount: standardAmount } = useMemo(() => parseSettings(refs.settings), [refs.settings]);
   const curMonth = today().slice(0, 7);
   const monthOptions = useMemo(() => recentMonths(3), []);
 
@@ -53,6 +55,9 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [existing, setExisting] = useState<{ member_id: number; months: string[]; amount: number }[]>([]);
+  // 已提前告知退出、退出月尚未結束的成員仍在籍（inMonth），要能記他們的奉納
+  const dateMonth = date.slice(0, 7);
+  const members = useMemo(() => refs.members.filter((m) => m.active || inMonth(m, dateMonth)), [refs.members, dateMonth]);
 
   const isDonation = source === 'donation';
   const member = members.find((m) => m.id === memberId);
@@ -152,7 +157,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
         className={`${inputCls} text-2xl py-3 tabular-nums`} />
       {isDonation && (
         <div className="flex gap-2 mt-2">
-          <Chip on={amt === STANDARD_AMOUNT} onClick={() => setAmount(String(STANDARD_AMOUNT))}>{fmtAmount(STANDARD_AMOUNT)}</Chip>
+          <Chip on={amt === standardAmount} onClick={() => setAmount(String(standardAmount))}>{fmtAmount(standardAmount)}</Chip>
         </div>
       )}
       {isDonation && months.length === 0 && <p className="text-yellow-400 text-sm mt-2">請選至少一個月</p>}
@@ -236,6 +241,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} className={inputCls} />
           <SectionLabel>日期</SectionLabel>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value || today())} className={inputCls} />
+          {(() => { const w = backdateWarning(date, lastSettledOn); return w ? <p className="text-xs text-yellow-400 mt-1">{w}</p> : null; })()}
         </div>
       )}
 

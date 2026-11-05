@@ -118,3 +118,24 @@ export const selectableStorages = (
     s.name === '郵局' || s.name === '現金' ||
     (grouped && (s.name.startsWith('現金（') || s.id === account!.default_storage_id)));
 };
+
+/** 點「常用」chip 時要改走哪筆應付；null = 照一般範本預填。已脫離的應付或標記失敗警示中不可再接上，以免重複記帳 */
+export const chipPayableId = (
+  template: { id: number }, openPayables: { id: number; template_id: number | null }[],
+  detachedFrom: number | null, hasPayErr: boolean, failedIds?: ReadonlySet<number>,
+): number | null => {
+  if (hasPayErr) return null;
+  const p = openPayables.find((x) => x.template_id === template.id);
+  return p && p.id !== detachedFrom && !failedIds?.has(p.id) ? p.id : null;
+};
+
+/** chip 點下去要做什麼：noop = 已接著這筆應付（不覆寫其預填）；attach = 套範本後接上 ?payable=pid；
+ *  detach = 套範本並清掉網址上的 ?payable（避免存檔時標記到別筆）；template = 只套範本 */
+export const chipAction = (
+  pid: number | null, currentPayableId: number | null, urlPayableId: number | null,
+): 'noop' | 'attach' | 'detach' | 'template' => {
+  if (pid !== null && pid === currentPayableId) return 'noop';
+  if (pid !== null) return 'attach';
+  if (urlPayableId !== null) return 'detach';
+  return 'template';
+};

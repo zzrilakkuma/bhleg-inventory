@@ -4,6 +4,7 @@ import {
   buildClaimWrites, buildRepaymentWrites, computeFreeze, buildSettlementWrite, nextPeriod, lateDays,
   publishText, applyLines, step1Delta,
 } from './settlement.ts';
+import { DEFAULT_SETTINGS } from './settings.ts';
 import type { FundAccount, FundStorage } from '../fund.ts';
 import type { Refs, Snapshot, UnclaimedExpense, OutstandingLoan } from './api.ts';
 
@@ -14,7 +15,7 @@ const refs = {
   accounts: [acc(1, '不凍結零用金', 'main', 10), acc(2, '緊急應變備用金', 'reserve', 10), acc(3, '共存前瞻預算', 'reserve', 10)],
   storages: [st(10, '郵局'), st(11, '現金')],
 } as unknown as Refs;
-const settings = { freeze_rate: 0.3, freeze_base: 'main', settlement_due_day: 20 };
+const settings = { ...DEFAULT_SETTINGS };
 const snap = (): Snapshot => ({
   transaction_id: 1, ord: 1, occurred_on: '2026-11-05', total: 9664, main: 8664,
   accounts: { 1: 8664, 2: 600, 3: 400 }, storages: { 10: 9000, 11: 664 },
@@ -29,7 +30,12 @@ test('computeFreeze: 8664 → 2599/2599; 0 or negative → 0/0', () => {
   assert.deepEqual(computeFreeze(8664, settings), { base: 8664, reserve: 2599, future: 2599 });
   assert.deepEqual(computeFreeze(0, settings), { base: 0, reserve: 0, future: 0 });
   assert.deepEqual(computeFreeze(-50, settings), { base: -50, reserve: 0, future: 0 });
-  assert.deepEqual(computeFreeze(1000, {}), { base: 1000, reserve: 300, future: 300 });
+  assert.deepEqual(computeFreeze(1000, settings), { base: 1000, reserve: 300, future: 300 });
+});
+test('computeFreeze: freeze_base total 以總餘款為基準；沒給 total 則退回零用金', () => {
+  const t = { ...settings, freeze_base: 'total' as const };
+  assert.deepEqual(computeFreeze(1000, t, 20000), { base: 20000, reserve: 6000, future: 6000 });
+  assert.deepEqual(computeFreeze(1000, t), { base: 1000, reserve: 300, future: 300 });
 });
 
 test('buildClaimWrites: one expense_claim tx, lines sum = selected sum, one line per expense', () => {
@@ -131,6 +137,9 @@ test('lateDays', () => {
   assert.equal(lateDays('2026-11', '2026-11-20', 20), 0);
   assert.equal(lateDays('2026-11', '2026-11-05', 20), 0);
   assert.equal(lateDays('2026-12', '2027-01-02', 20), 13);
+  // 截止日 31、2 月只有 28 天 → 以 2/28 計
+  assert.equal(lateDays('2026-02', '2026-03-02', 31), 2);
+  assert.equal(lateDays('2026-02', '2026-02-28', 31), 0);
 });
 
 test('nextPeriod: same month → count + 1', () => {
