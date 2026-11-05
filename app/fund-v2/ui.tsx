@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from 'react';
 import { fmtAmount } from '@/lib/fund';
 
 export function Amount({ value, kind, size = 'base' }: {
@@ -24,16 +25,27 @@ export function Chip({ on, onClick, children }: { on?: boolean; onClick?: () => 
   );
 }
 
-/** 手機底部抽屜；桌面置中顯示。 */
-export function Sheet({ open, onClose, title, children }: {
-  open: boolean; onClose: () => void; title?: string; children: React.ReactNode;
+/** 手機底部抽屜；桌面置中顯示。Escape 或「關閉」關閉。 */
+export function Sheet({ open, onClose, title, 'aria-label': ariaLabel, children }: {
+  open: boolean; onClose: () => void; title?: string; 'aria-label'?: string; children: React.ReactNode;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full md:max-w-lg max-h-[85vh] overflow-y-auto rounded-t-xl md:rounded-xl border border-[#333333] bg-[#0a0a0a] p-4 pb-8">
-        {title && <h2 className="text-base font-semibold text-white mb-3">{title}</h2>}
+      <div role="dialog" aria-modal="true" aria-label={ariaLabel ?? title}
+        className="relative w-full md:max-w-lg max-h-[85vh] overflow-y-auto rounded-t-xl md:rounded-xl border border-[#333333] bg-[#0a0a0a] p-4 pb-8">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          {title ? <h2 className="text-base font-semibold text-white">{title}</h2> : <span />}
+          <button type="button" onClick={onClose} autoFocus
+            className="shrink-0 px-3 py-1 rounded border border-[#333333] text-sm text-gray-400 hover:text-white">關閉</button>
+        </div>
         {children}
       </div>
     </div>

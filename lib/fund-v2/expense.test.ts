@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  pendingRecurring, guessTags, buildExpenseWrite, expenseImpact, buildGroupSummaryWrite,
+  pendingRecurring, guessTags, buildExpenseWrite, expenseImpact, buildGroupSummaryWrite, groupSummaryDefaultDate,
 } from './expense.ts';
 import type { FundTemplate, FundExpense, FundAccount, FundStorage, FundAdvancer } from '../fund.ts';
 import type { Refs } from './api.ts';
@@ -71,6 +71,20 @@ test('buildGroupSummaryWrite: lines negative at group account/default storage', 
   assert.equal(w.tx.group_id, 5);
   assert.equal(w.tx.amount, -500);
   assert.deepEqual(w.lines.map((l) => [l.account_id, l.storage_id, l.amount]), [[5, 11, -300], [5, 11, -200]]);
+});
+test('buildGroupSummaryWrite: default date is min(today, month-28)', () => {
+  const items = [{ desc: '菜', amount: 300 }];
+  assert.equal(buildGroupSummaryWrite({ groupAccountId: 5, month: '2026-11', items, refs, today: '2026-11-05' }).tx.occurred_on, '2026-11-05');
+  assert.equal(buildGroupSummaryWrite({ groupAccountId: 5, month: '2026-11', items, refs, today: '2026-11-30' }).tx.occurred_on, '2026-11-28');
+  assert.equal(buildGroupSummaryWrite({ groupAccountId: 5, month: '2026-10', items, refs, today: '2026-11-05' }).tx.occurred_on, '2026-10-28');
+  assert.equal(groupSummaryDefaultDate('2026-11', '2026-11-28'), '2026-11-28');
+});
+test('buildExpenseWrite advancer: forces main account even if a group account is passed', () => {
+  const w = buildExpenseWrite({ ...base, accountId: 5, advancer: adv });
+  assert.deepEqual(w.lines, []);
+  assert.ok(!w.tx.title.includes('廚房') && !(w.tx.note ?? '').includes('廚房'));
+  const w2 = buildExpenseWrite({ ...base, accountId: 5, storage: cash });
+  assert.deepEqual(w2.lines, [{ account_id: 5, storage_id: 11, amount: -1980 }]);
 });
 
 import { waiveClaims } from './expense.ts';

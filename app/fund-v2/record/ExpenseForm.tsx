@@ -139,6 +139,11 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
     if (typeof from === 'number' && !storages.some((x) => x.id === from)) setFrom(null);
   }, [storages, from]);
 
+  // 先墊付：請款明細一律入主科目，科目鎖定為不凍結零用金
+  useEffect(() => {
+    if (from === ADVANCE && mainAccount && accountId !== mainAccount.id) setAccountId(mainAccount.id);
+  }, [from, accountId, mainAccount]);
+
   const amt = Number(amount);
   const storage = typeof from === 'number' ? storages.find((s) => s.id === from) : undefined;
   const advancer = from === ADVANCE ? advancers.find((a) => a.id === advancerId) : undefined;
@@ -154,7 +159,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
   }, [ready, amt, vendor, description, date, storage, advancer, accountId, tags, voucher, note, refs, mainAccount?.id]);
 
   const reset = () => {
-    setAmount(''); setVendor(''); setDescription(''); setFrom(null); setAdvancerId(null); setTags([]);
+    setAmount(''); setAmtTouched(false); setVendor(''); setDescription(''); setFrom(null); setAdvancerId(null); setTags([]);
     setTagsTouched(false); setVoucher(''); setNote(''); setDate(today()); setAccountId(mainAccount?.id ?? 0);
   };
 
@@ -263,11 +268,15 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           <SectionLabel>日期</SectionLabel>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value || today())} className={inputCls} />
           <SectionLabel>科目</SectionLabel>
-          <div className="flex flex-wrap gap-2">
-            {refs.accounts.filter((a) => a.active && a.kind !== 'reserve').map((a) => (
-              <Chip key={a.id} on={accountId === a.id} onClick={() => setAccountId(a.id)}>{a.name}</Chip>
-            ))}
-          </div>
+          {from === ADVANCE ? (
+            <div className="text-xs text-gray-500">代墊請款一律入不凍結零用金</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {refs.accounts.filter((a) => a.active && a.kind !== 'reserve').map((a) => (
+                <Chip key={a.id} on={accountId === a.id} onClick={() => setAccountId(a.id)}>{a.name}</Chip>
+              ))}
+            </div>
+          )}
           <div className="flex gap-4 mt-5 text-sm">
             <button type="button" onClick={() => setWaiveOpen(true)} className="text-gray-400 underline underline-offset-4">放棄請款</button>
             <button type="button" onClick={() => setGroupOpen(true)} className="text-gray-400 underline underline-offset-4">小組彙整</button>

@@ -54,7 +54,7 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
       const w = buildTransferWrite(from, to, amt, date, refs, needRef ? ref : undefined, seq);
       await insertTransaction(w.tx, w.lines);
       toast.success('已記下');
-      setFromKey(null); setToKey(null); setAmount(''); setRef('');
+      setFromKey(null); setToKey(null); setAmount(''); setAmtTouched(false); setRef('');
       onSaved();
     } catch (e: any) {
       toast.error(e?.message ?? '寫入失敗');

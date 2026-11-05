@@ -37,14 +37,14 @@ export default function FundV2Layout({ children }: { children: React.ReactNode }
         <aside aria-label="側欄" className="hidden md:flex md:flex-col w-40 shrink-0 border-r border-[#333333] p-4 gap-1 sticky top-0 h-screen">
           <Link href="/" className="text-xs text-gray-500 hover:text-white mb-4">← 首頁</Link>
           {tabs.map((t) => (
-            <Link key={t.href} href={t.href}
+            <Link key={t.href} href={t.href} aria-current={active(t.href) ? 'page' : undefined}
               className={`px-3 py-2 rounded text-lg ${active(t.href) ? 'text-[#00FF41] bg-[rgba(0,255,65,0.08)]' : 'text-gray-300 hover:text-white'}`}>
               {t.label}
             </Link>
           ))}
           <div className="mt-4 flex flex-col gap-1 text-xs">
-            <Link href="/fund-v2/stats" className={`px-3 py-1 ${active('/fund-v2/stats') ? 'text-[#00FF41]' : 'text-gray-500 hover:text-white'}`}>統計</Link>
-            <Link href="/fund-v2/settings" className={`px-3 py-1 ${active('/fund-v2/settings') ? 'text-[#00FF41]' : 'text-gray-500 hover:text-white'}`}>設定</Link>
+            <Link href="/fund-v2/stats" aria-current={active('/fund-v2/stats') ? 'page' : undefined} className={`px-3 py-1 ${active('/fund-v2/stats') ? 'text-[#00FF41]' : 'text-gray-500 hover:text-white'}`}>統計</Link>
+            <Link href="/fund/manage" className="px-3 py-1 text-gray-500 hover:text-white">設定</Link>
           </div>
         </aside>
         <main className="flex-1 min-w-0">

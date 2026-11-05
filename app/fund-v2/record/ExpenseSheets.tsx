@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
 import { insertTransaction } from '@/lib/fund-db';
-import { fmtAmount } from '@/lib/fund';
+import { fmtAmount, todayISO } from '@/lib/fund';
 import { getUnclaimedExpenses, type Refs, type UnclaimedExpense } from '@/lib/fund-v2/api';
-import { buildGroupSummaryWrite, waiveClaims } from '@/lib/fund-v2/expense';
+import { buildGroupSummaryWrite, groupSummaryDefaultDate, waiveClaims } from '@/lib/fund-v2/expense';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { Sheet, Amount } from '../ui';
 
@@ -69,6 +69,7 @@ export function GroupSummarySheet({ open, onClose, refs, onDone }: {
   const now = new Date();
   const [accountId, setAccountId] = useState<number>(groups[0]?.id ?? 0);
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+  const [date, setDate] = useState(() => groupSummaryDefaultDate(month, todayISO()));
   const [items, setItems] = useState<{ desc: string; amount: string }[]>([{ desc: '', amount: '' }]);
   const [busy, setBusy] = useState(false);
 
@@ -77,14 +78,18 @@ export function GroupSummarySheet({ open, onClose, refs, onDone }: {
   const set = (i: number, p: Partial<{ desc: string; amount: string }>) =>
     setItems((l) => l.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const monthOk = /^\d{4}-\d{2}$/.test(month);
+  const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const changeMonth = (m: string) => {
+    setMonth(m);
+    if (/^\d{4}-\d{2}$/.test(m)) setDate(groupSummaryDefaultDate(m, todayISO()));
+  };
   const valid = items.filter((x) => Number(x.amount) > 0);
   const total = valid.reduce((s, x) => s + Number(x.amount), 0);
 
   const submit = async () => {
-    if (!valid.length || !accountId || busy || !monthOk) return;
+    if (!valid.length || !accountId || busy || !monthOk || !dateOk) return;
     setBusy(true);
     try {
-      const date = `${month}-28`;
       const { data, error } = await supabase.from('fund_transactions').select('occurred_on, seq').eq('occurred_on', date);
       if (error) throw error;
       const seq = nextSeq((data ?? []) as { occurred_on: string; seq: number }[], date);
@@ -108,7 +113,9 @@ export function GroupSummarySheet({ open, onClose, refs, onDone }: {
             {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
           <div className="text-xs text-gray-500 mb-1 mt-3">月份</div>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={inputCls} />
+          <input type="month" value={month} onChange={(e) => changeMonth(e.target.value)} className={inputCls} />
+          <label htmlFor="group-summary-date" className="block text-xs text-gray-500 mb-1 mt-3">日期</label>
+          <input id="group-summary-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
           <div className="text-xs text-gray-500 mb-1 mt-3">項目</div>
           {items.map((it, i) => (
             <div key={i} className="flex gap-2 mb-2">
@@ -119,7 +126,7 @@ export function GroupSummarySheet({ open, onClose, refs, onDone }: {
           ))}
           <button type="button" className="text-sm text-gray-400" onClick={() => setItems((l) => [...l, { desc: '', amount: '' }])}>＋ 加一項</button>
           <div className="text-sm text-gray-400 mt-3">合計 −{fmtAmount(total)}</div>
-          <button type="button" className={btnCls} disabled={!valid.length || busy || !monthOk} onClick={submit}>
+          <button type="button" className={btnCls} disabled={!valid.length || busy || !monthOk || !dateOk} onClick={submit}>
             {busy ? '寫入中...' : '記下'}
           </button>
         </>

@@ -97,7 +97,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
   const ready = amt > 0 && sourceOk && !!storage && remainder >= 0;
 
   const reset = () => {
-    setAmount(''); setMemberId(null); setLast5(''); setHandlerId(null); setDescription(''); setAlloc({});
+    setAmount(''); setAmtTouched(false); setMemberId(null); setLast5(''); setHandlerId(null); setDescription(''); setAlloc({});
     setMonths([curMonth]); setPayerId(null); setMessage(''); setDate(today()); setStorageId(null);
   };
 

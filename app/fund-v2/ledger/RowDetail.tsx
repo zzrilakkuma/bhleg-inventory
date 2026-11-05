@@ -36,7 +36,8 @@ export default function RowDetail({ row, refs, isAccountant, onChanged }: {
     } catch (e) { toast.error(String((e as Error).message ?? e)); } finally { setBusy(false); }
   };
   const del = async () => {
-    if (!window.confirm(`確定刪除「${row.title.split('\n')[0]}」？此操作無法復原。`)) return;
+    const extra = row.type === 'expense_claim' ? '\n刪除後，這筆請款涵蓋的代墊會回到待請款。' : '';
+    if (!window.confirm(`確定刪除「${row.title.split('\n')[0]}」？此操作無法復原。${extra}`)) return;
     setBusy(true);
     try { await deleteTransaction(row.id); toast.success('已刪除'); onChanged(); }
     catch (e) { toast.error(String((e as Error).message ?? e)); } finally { setBusy(false); }

@@ -1,5 +1,5 @@
 // 記 — 支出：純函式（模板、標籤猜測、寫入組裝、影響計算、小組彙整）。
-import { buildExpenseTexts } from '../fund.ts';
+import { buildExpenseTexts, todayISO } from '../fund.ts';
 import type { FundTemplate, FundExpense, FundStorage, FundAdvancer, ClaimStatus } from '../fund.ts';
 import type { NewTransaction, NewLine } from '../fund-db.ts';
 import type { Refs } from './api.ts';
@@ -34,7 +34,10 @@ export const buildExpenseWrite = (i: {
   amount: number; vendor: string; description: string; date: string; storage?: FundStorage;
   advancer?: FundAdvancer; accountId: number; tags: string[]; voucher?: string; note?: string; refs: Refs; seq?: number;
 }): ExpenseWrite => {
-  const account = i.refs.accounts.find((a) => a.id === i.accountId);
+  // 代墊請款一律入主科目（不凍結零用金）：有 advancer 時忽略傳入的 accountId。
+  const mainId = i.refs.accounts.find((a) => a.kind === 'main')?.id;
+  const accountId = i.advancer && mainId != null ? mainId : i.accountId;
+  const account = i.refs.accounts.find((a) => a.id === accountId);
   const texts = buildExpenseTexts({
     vendor: i.vendor, description: i.description, voucherNo: i.voucher ?? '', tags: i.tags,
     storageName: i.storage?.name ?? '', accountName: account?.name ?? '', advancerName: i.advancer?.name ?? null,
@@ -47,7 +50,7 @@ export const buildExpenseWrite = (i: {
       note: [texts.note, i.note?.trim()].filter(Boolean).join('\n'),
       amount: -i.amount, seq: i.seq, off_ledger: offLedger,
     },
-    lines: offLedger ? [] : [{ account_id: i.accountId, storage_id: i.storage!.id, amount: -i.amount }],
+    lines: offLedger ? [] : [{ account_id: accountId, storage_id: i.storage!.id, amount: -i.amount }],
     sub: {
       table: 'fund_expenses',
       row: {
@@ -66,9 +69,15 @@ export const expenseImpact = (w: ExpenseWrite, mainAccountId?: number): number =
     .reduce((s, l) => s + l.amount, 0);
 };
 
+/** 小組彙整預設日期：min(今天, 該月 28 日)，避免月中登錄時產生未來日期的快照。 */
+export const groupSummaryDefaultDate = (month: string, today: string): string => {
+  const d28 = `${month}-28`;
+  return today < d28 ? today : d28;
+};
+
 export const buildGroupSummaryWrite = (i: {
   groupAccountId: number; month: string; items: { desc: string; amount: number }[]; refs: Refs;
-  date?: string; seq?: number;
+  date?: string; seq?: number; today?: string;
 }): { tx: NewTransaction; lines: NewLine[] } => {
   const acc = i.refs.accounts.find((a) => a.id === i.groupAccountId);
   if (!acc) throw new Error('找不到小組科目');
@@ -79,7 +88,7 @@ export const buildGroupSummaryWrite = (i: {
   const total = items.reduce((s, it) => s + it.amount, 0);
   return {
     tx: {
-      type: 'group_summary', occurred_on: i.date ?? `${i.month}-28`, title: `${acc.name} ${monthNo}月 彙整`,
+      type: 'group_summary', occurred_on: i.date ?? groupSummaryDefaultDate(i.month, i.today ?? todayISO()), title: `${acc.name} ${monthNo}月 彙整`,
       voucher: '#', note: items.map((it) => `${it.desc} ${it.amount}`).join('\n'),
       amount: -total, seq: i.seq, group_id: acc.id,
     },
