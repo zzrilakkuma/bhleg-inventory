@@ -14,10 +14,17 @@ const oldestFirst = (xs: PeriodSummary[]) => [...xs].reverse();
 export const seriesFromPeriods = (summaries: PeriodSummary[]) =>
   oldestFirst(summaries).map((p) => ({ label: labelOf(p), endTotal: p.end_total, endMain: p.end_main, minMain: p.min_main }));
 
-export const expenseGroups = (summaries: PeriodSummary[]) =>
-  EXPENSE_GROUPS.map((group) => ({
-    group, amount: summaries.reduce((a, p) => a + (p.expense_by_group[group] ?? 0), 0),
+export const expenseGroups = (summaries: PeriodSummary[]) => {
+  const known = new Set<string>(EXPENSE_GROUPS);
+  return EXPENSE_GROUPS.map((group) => ({
+    group,
+    amount: summaries.reduce((a, p) => {
+      let v = p.expense_by_group[group] ?? 0;
+      if (group === '其他') for (const [k, x] of Object.entries(p.expense_by_group)) if (!known.has(k)) v += x;
+      return a + v;
+    }, 0),
   }));
+};
 
 export const incomeShares = (summaries: PeriodSummary[]) => {
   const labels = INCOME_SOURCE_LABEL as Record<string, string>;

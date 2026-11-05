@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-client';
+import { todayISO } from '@/lib/fund';
 import {
   getPeriodSummaries, getOpenPayables, getOutstandingLoans, getAdvancesOwed, getWaivedTotal,
   type PeriodSummary, type OutstandingLoan, type AdvanceOwed,
@@ -11,7 +12,6 @@ import { seriesFromPeriods, expenseGroups, incomeShares, salonByPeriod, rangeOpt
 import { Amount, Card, Chip, SectionLabel } from '../ui';
 import { LineChart, LineLegend, BarChart, StackedBar } from './charts';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
 
 interface Payable { id: number; title: string; amount: number; due_on: string | null; vendor: string | null }
 
@@ -38,7 +38,7 @@ export default function StatsPage() {
   const groups = useMemo(() => expenseGroups(rows), [rows]);
   const shares = useMemo(() => incomeShares(rows), [rows]);
   const salon = useMemo(() => salonByPeriod(rows), [rows]);
-  const today = todayStr();
+  const today = todayISO();
 
   if (err) return <div className="text-[#FF0055] text-sm">載入失敗：{err}</div>;
   if (!all) return <div className="text-gray-500 text-sm">載入中...</div>;

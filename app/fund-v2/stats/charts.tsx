@@ -25,7 +25,7 @@ export interface LinePoint { label: string; endTotal: number; endMain: number; m
 /** 小結（綠）與零用金（紫）雙線；月內最低點以琥珀色方點標示。 */
 export function LineChart({ series }: { series: LinePoint[] }) {
   if (!series.length) return <div className="text-sm text-gray-500">尚無資料</div>;
-  const W = 340, H = 190, L = 44, R = 10, T = 12, B = 26;
+  const W = 340, H = 190, L = 60, R = 10, T = 12, B = 26;
   const vals = series.flatMap((p) => [p.endTotal, p.endMain, p.minMain]);
   const hi = Math.max(...vals, 0), lo = Math.min(...vals, 0);
   const span = hi - lo || 1;

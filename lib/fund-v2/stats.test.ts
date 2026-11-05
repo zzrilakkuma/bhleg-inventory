@@ -36,3 +36,9 @@ test('salonByPeriod: oldest first', () => {
   const r = salonByPeriod([s('2026-10', 1, { salon_income: 7 }), s('2026-09', 1, { salon_income: 3 })]);
   assert.deepEqual(r, [{ label: '2026-09', amount: 3 }, { label: '2026-10', amount: 7 }]);
 });
+
+test('expenseGroups: unknown keys fold into 其他 so total is preserved', () => {
+  const r = expenseGroups([s('2026-10', 1, { expense_by_group: { 交通與車輛: 10, 神秘: 7, 其他: 1 } })]);
+  assert.equal(r[4].amount, 8);
+  assert.equal(r.reduce((a, x) => a + x.amount, 0), 18);
+});

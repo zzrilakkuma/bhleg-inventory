@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
+import { todayISO } from '@/lib/fund';
 import { getRefs, type Refs } from '@/lib/fund-v2/api';
 import { useRole } from '@/lib/fund-v2/role';
 import { Amount, Card, Chip, SectionLabel } from '../ui';
@@ -13,7 +14,6 @@ interface Payable {
   status: 'open' | 'paid' | 'cancelled'; template_id: number | null;
 }
 const inputCls = 'w-full bg-black border border-[#333333] rounded px-3 py-2 text-white text-base focus:border-[#00FF41] outline-none';
-const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function PayablesPage() {
   const role = useRole();
@@ -69,7 +69,7 @@ export default function PayablesPage() {
   };
 
   if (!rows) return <div className="text-gray-500 text-sm">載入中...</div>;
-  const today = todayStr();
+  const today = todayISO();
   const shown = rows.filter((r) => (history ? r.status !== 'open' : r.status === 'open'));
 
   return (

@@ -80,6 +80,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
   const templates = useMemo(() => pendingRecurring(refs.templates, monthExp, curMonth), [refs.templates, monthExp, curMonth]);
 
   // ?payable=ID：以應付（與其範本）預填
+  const [payErr, setPayErr] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState<number | null>(null);
   useEffect(() => {
     if (!payableId || prefilled === payableId) return;
@@ -158,9 +159,14 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
       });
       const saved = await insertTransaction(w.tx, w.lines, w.sub);
       if (payableId) {
-        const u = await supabase.from('fund_payables').update({ status: 'paid', paid_transaction_id: saved.id }).eq('id', payableId);
-        if (u.error) toast.error(`已記帳，但應付狀態更新失敗：${u.error.message}`);
-        router.replace('/fund-v2/record');
+        const u = await supabase.from('fund_payables').update({ status: 'paid', paid_transaction_id: saved.id })
+          .eq('id', payableId).eq('status', 'open').select('id');
+        if (u.error || !u.data || u.data.length === 0) {
+          setPayErr(`已記帳（交易 #${saved.id}），但應付 #${payableId} 沒有標記為已付${u.error ? `：${u.error.message}` : '（可能已被處理）'}。請到應付頁手動處理，勿重複記帳。`);
+        } else {
+          setPayErr(null);
+          router.replace('/fund-v2/record');
+        }
       }
       toast.success('已記下');
       reset(); onSaved(); loadLists();
@@ -179,6 +185,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
 
   return (
     <div>
+      {payErr && <div role="alert" className="mb-4 rounded border border-[#FF0055] p-3 text-sm text-[#FF0055]">{payErr}</div>}
       {templates.length > 0 && (
         <>
           <SectionLabel>常用</SectionLabel>
