@@ -13,10 +13,17 @@ if ((flag !== '-f' && flag !== '-c') || !value) {
   process.exit(1)
 }
 const r = spawnSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-At', flag, value], { encoding: 'utf8' })
+// psql may echo a connection URI in its own errors; never forward it
+const redact = (s) => s.replace(/postgres(ql)?:\/\/[^\s"']+/g, 'postgres://***')
 if (r.stdout) process.stdout.write(r.stdout)
+if (r.status === null) {
+  // spawn failure or signal: r.error can carry the argv (and so the URL); print only its code
+  console.error(`psql failed to start ${r.error?.code ?? r.signal ?? ''}`.trim())
+  process.exit(1)
+}
 if (r.status !== 0) {
-  if (r.stderr) process.stderr.write(r.stderr)
+  if (r.stderr) process.stderr.write(redact(r.stderr))
   process.exit(1)
 }
 // psql prints NOTICEs on stderr even on success; pass them through
-if (r.stderr) process.stderr.write(r.stderr)
+if (r.stderr) process.stderr.write(redact(r.stderr))

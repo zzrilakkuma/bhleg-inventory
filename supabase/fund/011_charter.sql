@@ -17,6 +17,8 @@ create unique index if not exists fund_emergencies_one_open
 create or replace function fund_roles_keep_accountant() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
+  -- 鎖住所有會計列，讓同時進行的降級排隊，避免兩邊都以為還有另一位而歸零
+  perform 1 from fund_roles where role = 'accountant' for update;
   if OLD.role = 'accountant'
      and not exists (select 1 from fund_roles where role = 'accountant' and user_id <> OLD.user_id)
      and (TG_OP = 'DELETE' or NEW.role <> 'accountant') then
