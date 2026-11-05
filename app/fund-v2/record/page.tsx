@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
 import { getRefs, getLatestSnapshot, type Refs, type Snapshot } from '@/lib/fund-v2/api';
 import { RoleGate } from '../role-gate';
@@ -46,7 +46,7 @@ export default function RecordPage() {
         </div>
         {err && <p className="text-[#FF0055] text-sm mb-3">{err}</p>}
         {!refs && !err && <p className="text-gray-500 text-sm">載入中...</p>}
-        {refs && mode === 'expense' && <ExpenseForm refs={refs} onSaved={reloadSnap} />}
+        {refs && mode === 'expense' && <Suspense fallback={null}><ExpenseForm refs={refs} onSaved={reloadSnap} /></Suspense>}
         {refs && mode === 'income' && <IncomeForm refs={refs} onSaved={reloadSnap} />}
         {refs && mode === 'transfer' && <TransferForm refs={refs} snapshot={snap} onSaved={reloadSnap} />}
       </div>

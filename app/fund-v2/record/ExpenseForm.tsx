@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
 import { insertTransaction } from '@/lib/fund-db';
@@ -21,6 +22,8 @@ const ADVANCE = 'advance';
 type RecentExpense = FundExpense;
 
 export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
+  const router = useRouter();
+  const payableId = Number(useSearchParams().get('payable')) || null;
   const mainAccount = refs.accounts.find((a) => a.kind === 'main') ?? refs.accounts[0];
   const advancers = refs.advancers.filter((a) => a.active);
 
@@ -75,6 +78,23 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
     return out;
   }, [recent]);
   const templates = useMemo(() => pendingRecurring(refs.templates, monthExp, curMonth), [refs.templates, monthExp, curMonth]);
+
+  // ?payable=ID：以應付（與其範本）預填
+  const [prefilled, setPrefilled] = useState<number | null>(null);
+  useEffect(() => {
+    if (!payableId || prefilled === payableId) return;
+    setPrefilled(payableId);
+    (async () => {
+      const { data: p, error } = await supabase.from('fund_payables').select('*').eq('id', payableId).maybeSingle();
+      if (error || !p) { toast.error(error?.message ?? '找不到這筆應付'); return; }
+      if (p.status !== 'open') { toast.error('這筆應付已處理'); return; }
+      const t = p.template_id != null ? refs.templates.find((x) => x.id === p.template_id) : undefined;
+      const v = p.vendor ?? t?.vendor ?? '';
+      setVendor(v); setAmount(String(Math.round(Number(p.amount))));
+      setDescription((t?.description ?? p.title ?? '').replace(/N月/g, `${Number(today().slice(5, 7))}月`));
+      setTags(guessTags(v, undefined, t)); setTagsTouched(false);
+    })();
+  }, [payableId, prefilled, refs.templates]);
 
   const lastWith = useCallback((v: string) => recent.find((e) => e.vendor === v), [recent]);
 
@@ -136,7 +156,12 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
         amount: amt, vendor: vendor.trim(), description: description.trim(), date, storage, advancer,
         accountId, tags, voucher: voucher.trim(), note, refs, seq,
       });
-      await insertTransaction(w.tx, w.lines, w.sub);
+      const saved = await insertTransaction(w.tx, w.lines, w.sub);
+      if (payableId) {
+        const u = await supabase.from('fund_payables').update({ status: 'paid', paid_transaction_id: saved.id }).eq('id', payableId);
+        if (u.error) toast.error(`已記帳，但應付狀態更新失敗：${u.error.message}`);
+        router.replace('/fund-v2/record');
+      }
       toast.success('已記下');
       reset(); onSaved(); loadLists();
     } catch (e: any) {
