@@ -49,3 +49,15 @@ export const buildEditPatch = (original: EditFields, edited: EditFields) => {
   if (edited.date !== original.date) { patch.occurred_on = edited.date; patch.stated_on = edited.date; }
   return patch;
 };
+
+/** 補記早於上次結算日的帳：只提醒，不擋送出 */
+export const backdateWarning = (date: string, lastSettledOn: string | null): string | null =>
+  lastSettledOn && date < lastSettledOn
+    ? `這個日期早於上次結算（${lastSettledOn.replace(/-0?/g, '/')}），已公布的數字會跟著變動`
+    : null;
+
+/** 資料庫守門訊息直接顯示；其餘加前綴 */
+export const deleteErrorText = (e: unknown): string => {
+  const message = String((e as { message?: unknown } | null)?.message ?? e);
+  return message.includes('請先刪除還款') || message.includes('請先刪除請款交易') ? message : `刪除失敗：${message}`;
+};

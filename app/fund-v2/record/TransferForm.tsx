@@ -7,6 +7,7 @@ import { insertTransaction } from '@/lib/fund-db';
 import { fmtAmount } from '@/lib/fund';
 import type { Refs, Snapshot } from '@/lib/fund-v2/api';
 import { emergencyDecisionRef, getEmergencies, openEmergency, type Emergency } from '@/lib/fund-v2/emergency';
+import { backdateWarning } from '@/lib/fund-v2/ledger';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { afterTransfer, buildTransferWrite, slotsFrom, validateTransfer } from '@/lib/fund-v2/transfer';
 import { Amount, Card, Chip, SectionLabel } from '../ui';
@@ -18,7 +19,7 @@ const today = () => {
 const inputCls = 'w-full bg-black border border-[#333333] rounded px-3 py-2 text-white text-base focus:border-[#00FF41] outline-none';
 const keyOf = (s: { kind: string; id: number }) => `${s.kind}:${s.id}`;
 
-export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; snapshot: Snapshot | null; onSaved: () => void }) {
+export default function TransferForm({ refs, snapshot, lastSettledOn, onSaved }: { refs: Refs; snapshot: Snapshot | null; lastSettledOn: string | null; onSaved: () => void }) {
   const slots = useMemo(() => slotsFrom(snapshot, refs), [snapshot, refs]);
   const [fromKey, setFromKey] = useState<string | null>(null);
   const [toKey, setToKey] = useState<string | null>(null);
@@ -129,6 +130,7 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
         </Card>
       )}
 
+      {(() => { const w = backdateWarning(today(), lastSettledOn); return w ? <p className="text-xs text-yellow-400 mt-1">{w}</p> : null; })()}
       <button type="button" disabled={!ready || busy} onClick={submit}
         className="w-full mt-6 py-3 rounded border border-[#00FF41] text-[#00FF41] text-base disabled:opacity-40">
         {busy ? '寫入中...' : '記下'}

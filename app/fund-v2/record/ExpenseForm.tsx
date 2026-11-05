@@ -8,6 +8,7 @@ import { insertTransaction } from '@/lib/fund-db';
 import { fmtAmount, TAG_GROUP_LABEL, type FundExpense, type FundTag, type FundTemplate } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
 import { markPayablePaid } from '@/lib/fund-v2/payable';
+import { backdateWarning } from '@/lib/fund-v2/ledger';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, selectableStorages } from '@/lib/fund-v2/expense';
 import { Chip, SectionLabel } from '../ui';
@@ -22,7 +23,7 @@ const ADVANCE = 'advance';
 
 type RecentExpense = FundExpense;
 
-export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
+export default function ExpenseForm({ refs, lastSettledOn, onSaved }: { refs: Refs; lastSettledOn: string | null; onSaved: () => void }) {
   const router = useRouter();
   const urlPayableId = Number(useSearchParams().get('payable')) || null;
   // 標記失敗後脫離該筆應付；只對失敗的那個 payable id 生效，換新的 ?payable 即恢復
@@ -82,6 +83,12 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
     for (const e of recent) if (e.vendor && !seen.has(e.vendor)) { seen.add(e.vendor); out.push(e.vendor); }
     return out;
   }, [recent]);
+  // 本月、該範本的 open 應付：點「常用」時改走 ?payable=ID 的既有預填流程（不另開標記已付的路徑）
+  const [openPayables, setOpenPayables] = useState<{ id: number; template_id: number | null }[]>([]);
+  useEffect(() => {
+    supabase.from('fund_payables').select('id, template_id').eq('status', 'open').eq('for_month', curMonth)
+      .then((r) => { if (!r.error) setOpenPayables((r.data ?? []) as { id: number; template_id: number | null }[]); });
+  }, [curMonth, urlPayableId]); // ?payable 變動（含儲存後被清掉）時重讀，避免留下已付的舊項
   const templates = useMemo(() => pendingRecurring(refs.templates, monthExp, curMonth), [refs.templates, monthExp, curMonth]);
 
   // ?payable=ID：以應付（與其範本）預填
@@ -212,7 +219,11 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           <SectionLabel>常用</SectionLabel>
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
-              <Chip key={t.id} onClick={() => applyTemplate(t)}>
+              <Chip key={t.id} onClick={() => {
+                const p = openPayables.find((x) => x.template_id === t.id);
+                if (p) router.replace(`/fund-v2/record?payable=${p.id}`);
+                else applyTemplate(t);
+              }}>
                 {t.name}{t.default_amount != null ? ` ${fmtAmount(Number(t.default_amount))}` : ''}
               </Chip>
             ))}
@@ -267,6 +278,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={inputCls} />
           <SectionLabel>日期</SectionLabel>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value || today())} className={inputCls} />
+          {(() => { const w = backdateWarning(date, lastSettledOn); return w ? <p className="text-xs text-yellow-400 mt-1">{w}</p> : null; })()}
           <SectionLabel>科目</SectionLabel>
           {from === ADVANCE ? (
             <div className="text-xs text-gray-500">代墊請款一律入不凍結零用金</div>

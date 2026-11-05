@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
-import { getRefs, getLatestSnapshot, type Refs, type Snapshot } from '@/lib/fund-v2/api';
+import { getRefs, getLatestSnapshot, getPeriods, type Refs, type Snapshot } from '@/lib/fund-v2/api';
 import { RoleGate } from '../role-gate';
 import { Amount } from '../ui';
 import ExpenseForm from './ExpenseForm';
@@ -18,6 +18,7 @@ export default function RecordPage() {
   const [mode, setMode] = useState<Mode>('expense');
   const [refs, setRefs] = useState<Refs | null>(null);
   const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [lastSettledOn, setLastSettledOn] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const reloadSnap = useCallback(() => {
@@ -25,6 +26,8 @@ export default function RecordPage() {
   }, []);
   useEffect(() => {
     getRefs(supabase).then(setRefs).catch((e) => setErr(String(e?.message ?? e)));
+    // 補記提醒用；讀不到就不提醒，不擋記帳
+    getPeriods(supabase).then((ps) => setLastSettledOn(ps[0]?.settled_on ?? null)).catch(() => {});
     reloadSnap();
   }, [reloadSnap]);
 
@@ -46,9 +49,9 @@ export default function RecordPage() {
         </div>
         {err && <p role="alert" className="text-[#FF0055] text-sm mb-3">{err}</p>}
         {!refs && !err && <p className="text-gray-500 text-sm">載入中...</p>}
-        {refs && mode === 'expense' && <Suspense fallback={null}><ExpenseForm refs={refs} onSaved={reloadSnap} /></Suspense>}
-        {refs && mode === 'income' && <IncomeForm refs={refs} onSaved={reloadSnap} />}
-        {refs && mode === 'transfer' && <TransferForm refs={refs} snapshot={snap} onSaved={reloadSnap} />}
+        {refs && mode === 'expense' && <Suspense fallback={null}><ExpenseForm refs={refs} lastSettledOn={lastSettledOn} onSaved={reloadSnap} /></Suspense>}
+        {refs && mode === 'income' && <IncomeForm refs={refs} lastSettledOn={lastSettledOn} onSaved={reloadSnap} />}
+        {refs && mode === 'transfer' && <TransferForm refs={refs} snapshot={snap} lastSettledOn={lastSettledOn} onSaved={reloadSnap} />}
       </div>
     </RoleGate>
   );

@@ -9,6 +9,7 @@ import {
   monthLabel, type IncomeSource,
 } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
+import { backdateWarning } from '@/lib/fund-v2/ledger';
 import { parseSettings } from '@/lib/fund-v2/settings';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { selectableStorages } from '@/lib/fund-v2/expense';
@@ -23,7 +24,7 @@ const inputCls = 'w-full bg-black border border-[#333333] rounded px-3 py-2 text
 const SOURCES: IncomeSource[] = ['donation', 'salon', 'event', 'kitchen', 'reinject', 'loan', 'other'];
 const SOURCE_CHIP: Partial<Record<IncomeSource, string>> = { reinject: '回注' };
 
-export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
+export default function IncomeForm({ refs, lastSettledOn, onSaved }: { refs: Refs; lastSettledOn: string | null; onSaved: () => void }) {
   const mainAccount = refs.accounts.find((a) => a.kind === 'main');
   const members = useMemo(() => refs.members.filter((m) => m.active), [refs.members]);
   const handlers = useMemo(() => refs.handlers.filter((h) => h.active), [refs.handlers]);
@@ -237,6 +238,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} className={inputCls} />
           <SectionLabel>日期</SectionLabel>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value || today())} className={inputCls} />
+          {(() => { const w = backdateWarning(date, lastSettledOn); return w ? <p className="text-xs text-yellow-400 mt-1">{w}</p> : null; })()}
         </div>
       )}
 

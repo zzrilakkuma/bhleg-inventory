@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unpaidMembers, duePayables, todoItems, unpaidListText } from './todo.ts';
+import { unpaidMembers, duePayables, todoItems, unpaidListText, groupsMissingSummary } from './todo.ts';
 import type { FundMember } from '../fund.ts';
 
 const m = (id: number, nickname: string, active = true): FundMember =>
@@ -53,4 +53,26 @@ test('unpaidMembers 不列出尚未加入與已退出者', () => {
   ];
   const out = unpaidMembers(ms, [], new Date(2026, 10, 20), 14);
   assert.deepEqual(out.map((x) => x.nickname), ['A']);
+});
+
+test('groupsMissingSummary：過了截止日才列出上個月沒彙整的小組', () => {
+  const gs = [{ id: 7, name: '小組專款（廚房）', active: true, kind: 'group' }, { id: 8, name: '小組專款（OG）', active: true, kind: 'group' },
+              { id: 9, name: '停用', active: false, kind: 'group' }, { id: 1, name: '不凍結零用金', active: true, kind: 'main' }];
+  const sums = [{ group_id: 7, title: '小組專款（廚房） 10月 彙整' }, { group_id: 8, title: '小組專款（OG） 9月 彙整' }];
+  assert.deepEqual(groupsMissingSummary(gs, sums, '2026-11-10', 14), []);
+  assert.deepEqual(groupsMissingSummary(gs, sums, '2026-11-14', 14), []);
+  assert.deepEqual(groupsMissingSummary(gs, sums, '2026-11-15', 14), ['小組專款（OG）']);
+});
+
+test('groupsMissingSummary：一月看前一年十二月；截止日 31 視為月底', () => {
+  const gs = [{ id: 7, name: 'G', active: true, kind: 'group' }];
+  assert.deepEqual(groupsMissingSummary(gs, [{ group_id: 7, title: 'G 12月 彙整' }], '2027-01-20', 14), []);
+  assert.deepEqual(groupsMissingSummary(gs, [], '2027-01-20', 14), ['G']);
+  assert.deepEqual(groupsMissingSummary(gs, [], '2026-11-30', 31), []);
+});
+
+test('todoItems：group_due', () => {
+  const out = todoItems({ payables: [], unclaimed: [], unpaid: [], groupDue: ['A', 'B'] });
+  assert.deepEqual(out, [{ kind: 'group_due', names: ['A', 'B'] }]);
+  assert.deepEqual(todoItems({ payables: [], unclaimed: [], unpaid: [] }), []);
 });
