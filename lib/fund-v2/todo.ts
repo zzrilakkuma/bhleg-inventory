@@ -1,6 +1,7 @@
 // 算首頁「要做的事」：純函式。
 import { monthLabel, type FundMember } from '../fund.ts';
 import { dayInMonth } from './settings.ts';
+import { membersInMonth } from './membership.ts';
 
 export interface PayableLike { id: number; title: string; amount: number; due_on: string | null }
 export interface DuePayable<P extends PayableLike = PayableLike> { payable: P; overdue: boolean }
@@ -19,7 +20,7 @@ export const unpaidMembers = (
   const month = ymd(today).slice(0, 7);
   if (today.getDate() <= dayInMonth(month, dueDay)) return [];
   const paid = new Set(donationsThisMonth.filter((d) => d.months.includes(month)).map((d) => d.member_id));
-  return members.filter((x) => x.active && !paid.has(x.id));
+  return membersInMonth(members, month).filter((x) => !paid.has(x.id));
 };
 
 export const duePayables = <P extends PayableLike>(payables: P[], today: Date): DuePayable<P>[] => {

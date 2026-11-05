@@ -53,7 +53,7 @@ export default function SettlePage() {
   const view = useMemo(() => {
     if (!data) return null;
     const dueDay = parseSettings(data.refs.settings).donation_due_day;
-    const unpaid = unpaidMembers(data.refs.members.filter((m) => m.active), data.donations, today, dueDay);
+    const unpaid = unpaidMembers(data.refs.members, data.donations, today, dueDay);
     return {
       items: todoItems({ payables: duePayables(data.payables, today), unclaimed: data.unclaimed, unpaid }),
       copyText: unpaidListText(unpaid, curMonth),

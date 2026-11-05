@@ -44,3 +44,13 @@ test('todoItems: kinds and empty', () => {
 test('unpaidListText', () => {
   assert.equal(unpaidListText([m(2, 'B'), m(3, 'C')], '2026-11'), '11月 尚未奉納：B、C');
 });
+
+test('unpaidMembers 不列出尚未加入與已退出者', () => {
+  const D = (o: Partial<FundMember>) => ({ ...m(0, ''), ...o });
+  const ms = [
+    D({ id: 1, nickname: 'A' }), D({ id: 2, nickname: 'B', joined_at: '2026-12-01' }),
+    D({ id: 3, nickname: 'C', left_at: '2026-10-31', active: false }),
+  ];
+  const out = unpaidMembers(ms, [], new Date(2026, 10, 20), 14);
+  assert.deepEqual(out.map((x) => x.nickname), ['A']);
+});
