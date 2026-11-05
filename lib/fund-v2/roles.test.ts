@@ -32,6 +32,16 @@ test('roleRows 合併成員與角色、略過停用成員', () => {
     [{ id: 1, nickname: 'S', user_id: 'u1', active: true }, { id: 2, nickname: 'Z', user_id: 'u2', active: false }, { id: 3, nickname: 'X', user_id: null, active: true }],
     [{ user_id: 'u1', role: 'accountant' }]);
   assert.deepEqual(out.map((r) => [r.nickname, r.role]), [['S', 'accountant'], ['X', 'member']]);
+  assert.equal(out[0].exited, undefined);
+});
+test('roleRows 列出已退出的會計（exited），已退出的參與者仍略過', () => {
+  const out = roleRows(
+    [{ id: 1, nickname: 'S', user_id: 'u1', active: true }, { id: 2, nickname: 'Z', user_id: 'u2', active: false }, { id: 3, nickname: 'Y', user_id: 'u3', active: false }],
+    [{ user_id: 'u1', role: 'accountant' }, { user_id: 'u2', role: 'accountant' }]);
+  assert.deepEqual(out, [
+    { member_id: 1, nickname: 'S', user_id: 'u1', role: 'accountant' },
+    { member_id: 2, nickname: 'Z', user_id: 'u2', role: 'accountant', exited: true },
+  ]);
 });
 test('roleErrorText', () => {
   assert.equal(roleErrorText({ message: 'P0001: 至少要保留一位會計' }), '至少要保留一位會計');

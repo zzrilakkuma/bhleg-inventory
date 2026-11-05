@@ -11,6 +11,7 @@ import {
 import type { Refs } from '@/lib/fund-v2/api';
 import { backdateWarning } from '@/lib/fund-v2/ledger';
 import { parseSettings } from '@/lib/fund-v2/settings';
+import { inMonth } from '@/lib/fund-v2/membership';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { selectableStorages } from '@/lib/fund-v2/expense';
 import { allocationLines, buildIncomeWrite, monthlyCapWarning } from '@/lib/fund-v2/income';
@@ -26,7 +27,6 @@ const SOURCE_CHIP: Partial<Record<IncomeSource, string>> = { reinject: '回注' 
 
 export default function IncomeForm({ refs, lastSettledOn, onSaved }: { refs: Refs; lastSettledOn: string | null; onSaved: () => void }) {
   const mainAccount = refs.accounts.find((a) => a.kind === 'main');
-  const members = useMemo(() => refs.members.filter((m) => m.active), [refs.members]);
   const handlers = useMemo(() => refs.handlers.filter((h) => h.active), [refs.handlers]);
   const specials = useMemo(
     () => refs.accounts.filter((a) => a.active && (a.kind === 'group' || a.kind === 'special')), [refs.accounts]);
@@ -55,6 +55,9 @@ export default function IncomeForm({ refs, lastSettledOn, onSaved }: { refs: Ref
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [existing, setExisting] = useState<{ member_id: number; months: string[]; amount: number }[]>([]);
+  // 已提前告知退出、退出月尚未結束的成員仍在籍（inMonth），要能記他們的奉納
+  const dateMonth = date.slice(0, 7);
+  const members = useMemo(() => refs.members.filter((m) => m.active || inMonth(m, dateMonth)), [refs.members, dateMonth]);
 
   const isDonation = source === 'donation';
   const member = members.find((m) => m.id === memberId);

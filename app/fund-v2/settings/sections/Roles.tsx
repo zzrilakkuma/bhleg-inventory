@@ -57,7 +57,7 @@ export default function Roles() {
             return (
               <div key={r.member_id} className="py-2 border-b border-[#222222] last:border-b-0 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm">{r.nickname}　<span className={r.role === 'accountant' ? 'text-[#00FF41]' : 'text-gray-400'}>{r.role === 'accountant' ? '會計' : '參與者'}</span></div>
+                  <div className="text-sm">{r.nickname}　<span className={r.role === 'accountant' ? 'text-[#00FF41]' : 'text-gray-400'}>{r.role === 'accountant' ? '會計' : '參與者'}</span>{r.exited && <span className="ml-2 text-xs text-gray-500 border border-[#333333] rounded px-1">已退出</span>}</div>
                   {!check.ok && <div id={`role-why-${r.member_id}`} className="text-xs text-gray-500">{check.reason}</div>}
                 </div>
                 <button type="button" disabled={busy || !check.ok} onClick={() => change(r, to)}

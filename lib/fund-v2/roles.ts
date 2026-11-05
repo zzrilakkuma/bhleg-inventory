@@ -2,7 +2,7 @@
 // 不可在模組層級 import 瀏覽器 client 或 next/*。
 import type { FundMember } from '../fund.ts';
 
-export interface RoleRow { member_id: number; nickname: string; user_id: string | null; role: 'accountant' | 'member' }
+export interface RoleRow { member_id: number; nickname: string; user_id: string | null; role: 'accountant' | 'member'; exited?: true }
 
 const LAST = '至少要保留一位會計';
 
@@ -11,11 +11,13 @@ export const roleRows = (
   roles: { user_id: string; role: string }[],
 ): RoleRow[] => {
   const acc = new Set(roles.filter((r) => r.role === 'accountant').map((r) => r.user_id));
-  return members.filter((m) => m.active).map((m) => ({
+  // 已退出但仍是會計的成員也列出（標 exited），否則看不到也無法降級，寫入權限卻還在
+  return members.filter((m) => m.active || (!!m.user_id && acc.has(m.user_id))).map((m) => ({
     member_id: m.id,
     nickname: m.nickname,
     user_id: m.user_id,
     role: m.user_id && acc.has(m.user_id) ? 'accountant' : 'member',
+    ...(m.active ? {} : { exited: true as const }),
   }));
 };
 

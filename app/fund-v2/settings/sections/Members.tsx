@@ -26,6 +26,13 @@ export default function Members() {
   const [note, setNote] = useState('');
   const [fieldErr, setFieldErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [accountants, setAccountants] = useState<Set<string>>(new Set());
+
+  // 只用來提醒：退出的會計仍保有 fund_roles 寫入權限，要另到「角色」降級
+  useEffect(() => {
+    supabase.from('fund_roles').select('user_id, role').eq('role', 'accountant')
+      .then((r) => { if (!r.error) setAccountants(new Set((r.data ?? []).map((x: { user_id: string }) => x.user_id))); });
+  }, []);
 
   const load = useCallback(async () => {
     const refs = await getRefs(supabase);
@@ -141,6 +148,7 @@ export default function Members() {
                   <input value={note} onChange={(e) => setNote(e.target.value)} className={`${inputCls} mt-1`} />
                 </label>
                 {warning && <p className="text-sm text-amber-400">{warning}</p>}
+                {current.user_id && accountants.has(current.user_id) && <p className="text-sm text-amber-400">這位成員是會計，退出後請到「角色」改為參與者</p>}
                 {fieldErr && <p role="alert" className="text-[#FF0055] text-sm">{fieldErr}</p>}
                 <div className="flex gap-2">
                   <button type="button" disabled={busy} onClick={confirmExit} className={btnCls}>確定退出</button>
