@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
@@ -25,8 +25,9 @@ type RecentExpense = FundExpense;
 export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
   const router = useRouter();
   const urlPayableId = Number(useSearchParams().get('payable')) || null;
-  const [detached, setDetached] = useState(false); // 標記失敗後脫離應付模式
-  const payableId = detached ? null : urlPayableId;
+  // 標記失敗後脫離該筆應付；只對失敗的那個 payable id 生效，換新的 ?payable 即恢復
+  const [detachedFrom, setDetachedFrom] = useState<number | null>(null);
+  const payableId = urlPayableId !== null && detachedFrom === urlPayableId ? null : urlPayableId;
   const mainAccount = refs.accounts.find((a) => a.kind === 'main') ?? refs.accounts[0];
   const advancers = refs.advancers.filter((a) => a.active);
 
@@ -85,6 +86,13 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
   // ?payable=ID：以應付（與其範本）預填
   const [payErr, setPayErr] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState<number | null>(null);
+  // 開啟新的 ?payable 時清掉上一筆的失敗狀態（失敗後 URL 被清成 null 時保留紅框直到「知道了」）
+  const prevUrlPayable = useRef(urlPayableId);
+  useEffect(() => {
+    if (prevUrlPayable.current === urlPayableId) return;
+    prevUrlPayable.current = urlPayableId;
+    if (urlPayableId !== null) { setPayErr(null); setDetachedFrom(null); setPrefilled(null); }
+  }, [urlPayableId]);
   useEffect(() => {
     if (!payableId || prefilled === payableId) return;
     setPrefilled(payableId);
@@ -164,13 +172,15 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
       if (payableId) {
         const r = await markPayablePaid(supabase, payableId, saved.id);
         if (!r.ok) {
-          setDetached(true);
+          setDetachedFrom(payableId);
           setPayErr(`已記帳（交易 #${saved.id}），但應付 #${payableId} 沒有標記為已付：${r.reason}。請到應付頁手動處理，勿重複記帳。`);
+          router.replace('/fund-v2/record'); // 避免重新整理後以空白表單再次觸發標記
           reset(); onSaved(); loadLists();
           return;
         }
         router.replace('/fund-v2/record');
       }
+      setPayErr(null);
       toast.success('已記下');
       reset(); onSaved(); loadLists();
     } catch (e: any) {
