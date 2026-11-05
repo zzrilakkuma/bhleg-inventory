@@ -15,6 +15,18 @@ test('canChange', () => {
   assert.deepEqual(canChange(rows[1], 'member', [rows[1], rows[3]], 'u9'), { ok: false, reason: '至少要保留一位會計' });
   assert.equal(canChange(rows[3], 'accountant', rows, 'u1').ok, true);
 });
+test('canChange: selfUserId 為空時一律拒絕', () => {
+  const r = { ok: false, reason: '無法確認目前登入的帳號，請重新整理' };
+  assert.deepEqual(canChange(rows[1], 'member', rows, ''), r);
+  assert.deepEqual(canChange(rows[3], 'accountant', rows, ''), r);
+});
+test('canChange: 兩位成員共用同一 user_id 只算一位會計', () => {
+  const shared: RoleRow[] = [
+    { member_id: 1, nickname: 'A', user_id: 'u2', role: 'accountant' },
+    { member_id: 2, nickname: 'B', user_id: 'u2', role: 'accountant' },
+  ];
+  assert.deepEqual(canChange(shared[0], 'member', shared, 'u9'), { ok: false, reason: '至少要保留一位會計' });
+});
 test('roleRows 合併成員與角色、略過停用成員', () => {
   const out = roleRows(
     [{ id: 1, nickname: 'S', user_id: 'u1', active: true }, { id: 2, nickname: 'Z', user_id: 'u2', active: false }, { id: 3, nickname: 'X', user_id: null, active: true }],

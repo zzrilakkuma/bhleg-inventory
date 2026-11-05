@@ -58,9 +58,11 @@ export default function Roles() {
               <div key={r.member_id} className="py-2 border-b border-[#222222] last:border-b-0 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm">{r.nickname}　<span className={r.role === 'accountant' ? 'text-[#00FF41]' : 'text-gray-400'}>{r.role === 'accountant' ? '會計' : '參與者'}</span></div>
-                  {!check.ok && <div className="text-xs text-gray-500">{check.reason}</div>}
+                  {!check.ok && <div id={`role-why-${r.member_id}`} className="text-xs text-gray-500">{check.reason}</div>}
                 </div>
-                <button type="button" disabled={busy || !check.ok} onClick={() => change(r, to)} className={btnCls}>
+                <button type="button" disabled={busy || !check.ok} onClick={() => change(r, to)}
+                  aria-label={to === 'accountant' ? `把 ${r.nickname} 設為會計` : `把 ${r.nickname} 改為參與者`}
+                  aria-describedby={check.ok ? undefined : `role-why-${r.member_id}`} className={btnCls}>
                   {to === 'accountant' ? '設為會計' : '改為參與者'}
                 </button>
               </div>
