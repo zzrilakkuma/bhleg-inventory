@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase-client';
 import { insertTransaction } from '@/lib/fund-db';
 import { fmtAmount } from '@/lib/fund';
 import type { Refs, Snapshot } from '@/lib/fund-v2/api';
+import { emergencyDecisionRef, getEmergencies, openEmergency, type Emergency } from '@/lib/fund-v2/emergency';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { afterTransfer, buildTransferWrite, slotsFrom, validateTransfer } from '@/lib/fund-v2/transfer';
 import { Amount, Card, Chip, SectionLabel } from '../ui';
@@ -25,6 +26,7 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
   const [amtTouched, setAmtTouched] = useState(false);
   const [ref, setRef] = useState('');
   const [busy, setBusy] = useState(false);
+  const [emergency, setEmergency] = useState<Emergency | null>(null);
 
   const from = slots.find((s) => keyOf(s) === fromKey);
   const to = slots.find((s) => keyOf(s) === toKey);
@@ -32,6 +34,15 @@ export default function TransferForm({ refs, snapshot, onSaved }: { refs: Refs; 
   const needRef = from?.kind === 'account' && from.accountKind === 'reserve';
 
   useEffect(() => { if (!needRef) setRef(''); }, [needRef]);
+  useEffect(() => {
+    let alive = true;
+    getEmergencies(supabase).then((l) => { if (alive) setEmergency(openEmergency(l)); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  // 緊急狀態中從備用金轉出：依據為空時預填，不覆蓋使用者已輸入的
+  useEffect(() => {
+    if (needRef && emergency) setRef((r) => (r ? r : emergencyDecisionRef(emergency)));
+  }, [needRef, emergency]);
   // 選了相同的位置就清掉「到」
   useEffect(() => { if (fromKey && fromKey === toKey) setToKey(null); }, [fromKey, toKey]);
 
