@@ -25,7 +25,7 @@
 
 ## Review Focus
 
-1. **設定值輸入錯誤**：把凍存比例填成 `30`（想填 30%）、日期填 0 或 32、金額留空或負數 → 不寫入，欄位旁顯示原因；`freeze_rate` 超過 0.5（兩筆凍存合計超過 100%）也拒絕。（Task 1）
+1. **設定值輸入錯誤**：把凍存比例填成 `30`（想填 30%）、日期填 0 或 32、把截止日設成 31 而該月只有 30 天（視為月底）、金額留空或負數 → 不寫入，欄位旁顯示原因；`freeze_rate` 超過 0.5（兩筆凍存合計超過 100%）也拒絕。（Task 1）
 2. **把自己或最後一位會計降級**：資料庫拒絕，畫面顯示「至少要保留一位會計」，角色清單不變。（Task 0、Task 5）
 3. **月中加入、退出後的成員**：加入月份之前不算未繳；退出後的月份不算未繳；但退出前的奉納在每月一覽照樣顯示；`joined_at` 為空的舊成員照 `active` 判斷。（Task 2、Task 3）
 4. **固定費用應付重複產生**：兩個分頁同時打開「算」、或同一天打開很多次，每個模板每月只會有一筆；本月已經記過該店家的支出就不再產生；沒有預設金額的模板不產生。（Task 0、Task 6）
@@ -112,7 +112,7 @@ git commit -m "feat(fund-v2): charter schema guards and safe psql wrapper"
 **Files:**
 - Create: `lib/fund-v2/settings.ts`, `lib/fund-v2/settings.test.ts`
 - Create: `app/fund-v2/settings/page.tsx`, `app/fund-v2/settings/sections/Rules.tsx`
-- Modify: `lib/fund-v2/settlement.ts`（`computeFreeze`、`buildSettlementWrite` 改吃 `FundSettings`）、`lib/fund-v2/settlement.test.ts`
+- Modify: `lib/fund-v2/settlement.ts`（`computeFreeze`、`buildSettlementWrite` 改吃 `FundSettings`；`lateDays` 用 `dayInMonth`）、`lib/fund-v2/settlement.test.ts`、`lib/fund-v2/todo.ts`、`lib/fund-v2/todo.test.ts`
 - Modify: `app/fund-v2/settle/run/page.tsx`、`app/fund-v2/settle/page.tsx`、`app/fund-v2/record/IncomeForm.tsx`（改用 `parseSettings`）
 - Modify: `app/fund-v2/layout.tsx:46`、`app/fund-v2/settle/page.tsx` 底部的「設定」連結 → `/fund-v2/settings`（「成員」→ `/fund-v2/settings#members`；「科目」維持 `/fund/manage`）
 
@@ -131,6 +131,8 @@ export const SETTING_META: Record<SettingKey, { label: string; unit: string; hin
 export const parseSettings: (raw: Record<string, unknown>) => FundSettings;   // 缺或不合法的 key 用預設
 export const validateSetting: (key: SettingKey, input: string) => { ok: true; value: number | 'main' | 'total' } | { ok: false; reason: string };
 export const charterDiffs: (s: FundSettings) => { key: SettingKey; label: string; charter: string; current: string }[];
+/** month='YYYY-MM'；回傳該月實際的日（超過該月天數取月底） */
+export const dayInMonth: (month: string, day: number) => number;
 export const saveSetting: (client: { from: (t: string) => any }, key: SettingKey, value: number | string) => Promise<void>; // upsert {key, value, updated_at}
 ```
 - `SETTING_META` 的 label：`奉納截止日`、`結算日`、`小組結算截止日`、`退出提前告知天數`、`單月奉納上限`、`標準奉納金額`、`凍存比例`、`凍存基準`。
@@ -145,9 +147,16 @@ test('parseSettings 以預設補缺、忽略不合法值', () => {
   assert.equal(s.freeze_rate, 0.3); assert.equal(s.monthly_cap, 8000);
   assert.equal(s.freeze_base, 'main'); assert.equal(s.settlement_due_day, 25);
 });
-test('validateSetting 日期 1–28', () => {
+test('validateSetting 日期 1–31', () => {
   assert.deepEqual(validateSetting('settlement_due_day', '20'), { ok: true, value: 20 });
-  for (const bad of ['0', '29', '32', '', '1.5', '-3', 'x']) assert.equal(validateSetting('donation_due_day', bad).ok, false);
+  assert.deepEqual(validateSetting('donation_due_day', '31'), { ok: true, value: 31 });
+  for (const bad of ['0', '32', '', '1.5', '-3', 'x']) assert.equal(validateSetting('donation_due_day', bad).ok, false);
+});
+test('dayInMonth：該月沒有那一天就取月底', () => {
+  assert.equal(dayInMonth('2026-02', 31), 28);
+  assert.equal(dayInMonth('2028-02', 30), 29);
+  assert.equal(dayInMonth('2026-11', 31), 30);
+  assert.equal(dayInMonth('2026-11', 14), 14);
 });
 test('validateSetting 凍存比例 0–0.5，擋住把 30 當 30%', () => {
   assert.deepEqual(validateSetting('freeze_rate', '0.3'), { ok: true, value: 0.3 });
@@ -170,11 +179,11 @@ test('charterDiffs：預設實務只有凍存基準與章程不同', () => {
   assert.deepEqual(charterDiffs({ ...DEFAULT_SETTINGS, settlement_due_day: 5 }).map((x) => x.key), ['settlement_due_day', 'freeze_base']);
 });
 ```
-日期上限取 28 是為了每個月都有那一天。`validateSetting('freeze_rate','30')` 的 reason 固定為 `請填 0 到 0.5 之間的小數，例如 30% 填 0.3`。
+日期可填 1–31（使用者決定）；遇到沒有那一天的月份一律視為月底，所有比較「今天是否過了截止日」的地方都要先過 `dayInMonth`。`validateSetting('freeze_rate','30')` 的 reason 固定為 `請填 0 到 0.5 之間的小數，例如 30% 填 0.3`。
 
 - [ ] **Step 2: 跑測試確認失敗** — Run: `node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/fund-v2/settings.test.ts` → FAIL（module not found）
 
-- [ ] **Step 3: 實作 `settings.ts`**，再把 `settlement.ts`、三個頁面改成 `const settings = parseSettings(refs.settings)`；移除頁面裡的 `Number(settings.x ?? …)` 與對 `FREEZE_RATE`／`MONTHLY_CAP`／`STANDARD_AMOUNT` 常數的後備引用。更新 `settlement.test.ts` 傳入 `{ ...DEFAULT_SETTINGS, … }`，並補一條 `freeze_base: 'total'` 時以 total 為基準的測試。
+- [ ] **Step 3: 實作 `settings.ts`**，`lateDays`（`settlement.ts`）、`unpaidMembers`（`todo.ts`）內部的截止日改用 `dayInMonth(month, dueDay)`，各補一條 2 月＋截止日 31 的測試。再把 `settlement.ts`、三個頁面改成 `const settings = parseSettings(refs.settings)`；移除頁面裡的 `Number(settings.x ?? …)` 與對 `FREEZE_RATE`／`MONTHLY_CAP`／`STANDARD_AMOUNT` 常數的後備引用。更新 `settlement.test.ts` 傳入 `{ ...DEFAULT_SETTINGS, … }`，並補一條 `freeze_base: 'total'` 時以 total 為基準的測試。
 
 - [ ] **Step 4: 跑測試** — Run: `npm test` → 全數通過
 
@@ -267,41 +276,50 @@ test('unpaidMembers 不列出尚未加入與已退出者', () => {
 - Consumes: `inMonth`（Task 2）、`recentMonths(n)`（`lib/fund.ts`）。
 - Produces:
 ```ts
-export interface DonationRow { member_id: number | null; months: string[]; amount: number }
+export interface DonationRow { member_id: number | null; months: string[]; amount: number; paid_on: string }  // paid_on = 交易的 stated_on ?? occurred_on
 export const getDonationsForMonths: (client: SupabaseClient, months: string[]) => Promise<DonationRow[]>;
-// fund_donations 內嵌 fund_transactions(amount)，以 .overlaps('months', months) 篩選
+// fund_donations 內嵌 fund_transactions(amount, occurred_on, stated_on)，以 .overlaps('months', months) 篩選
 
-export type Cell = { state: 'paid'; amount: number } | { state: 'unpaid' } | { state: 'na' };
+export type Cell = { state: 'paid'; amount: number } | { state: 'covered' } | { state: 'unpaid' } | { state: 'na' };
 export const donationGrid: (members: FundMember[], months: string[], rows: DonationRow[], today: string, dueDay: number)
   => { member: FundMember; cells: Cell[] }[];
 ```
-- 一筆奉納涵蓋多個月時，金額平均分到各月（`Math.round(amount / months.length)`）。同成員同月多筆相加。
+- **不平均分攤（使用者決定，與總表一致：總表把整筆金額記在收款那一列，標題寫「12月+1月+2月 奉納金」）**。一筆奉納的整筆金額只記在一格：收款月（`paid_on.slice(0,7)`）若在涵蓋月份內就記在收款月，否則記在涵蓋月份的第一個月；其餘涵蓋月份為 `covered`（已含，無金額）。同成員同月多筆金額相加；同一格既有金額又被別筆涵蓋時為 `paid`。`months` 為空的舊資料視為只涵蓋收款月。合計列只加 `paid` 的金額，因此各月合計＝該月認列的實收。
 - `na`：該月不在籍。`unpaid`：在籍、無奉納，且（該月早於本月，或為本月且今天日期 > dueDay）；本月尚未過截止日、或未來月份且無奉納 → 也回 `{ state: 'na' }`。
 - 列出的成員＝在任一所選月份在籍者；排序沿用 `sort_order`。
 
 - [ ] **Step 1: 寫失敗的測試**
 
 ```ts
-test('donationGrid：跨月平均、在籍外為 na、截止日前不算未繳', () => {
+test('donationGrid：整筆記在收款月、在籍外為 na、截止日前不算未繳', () => {
   const ms = [
     { id: 1, nickname: 'A', sort_order: 1, active: true, joined_at: null, left_at: null },
     { id: 2, nickname: 'B', sort_order: 2, active: true, joined_at: '2026-11-01', left_at: null },
   ] as FundMember[];
-  const rows = [{ member_id: 1, months: ['2026-10', '2026-11'], amount: 3000 }];
+  const rows = [{ member_id: 1, months: ['2026-10', '2026-11'], amount: 3000, paid_on: '2026-11-03' }];
   const g = donationGrid(ms, ['2026-10', '2026-11'], rows, '2026-11-05', 14);
-  assert.deepEqual(g[0].cells, [{ state: 'paid', amount: 1500 }, { state: 'paid', amount: 1500 }]);
+  assert.deepEqual(g[0].cells, [{ state: 'covered' }, { state: 'paid', amount: 3000 }]);   // 整筆記在收款月
   assert.deepEqual(g[1].cells, [{ state: 'na' }, { state: 'na' }]);           // 10 月未加入；11 月未過 14 日
   const late = donationGrid(ms, ['2026-11'], rows.slice(0, 0), '2026-11-20', 14);
   assert.deepEqual(late.map((r) => r.cells[0].state), ['unpaid', 'unpaid']);
+});
+test('donationGrid：收款月不在涵蓋月份內 → 記在第一個涵蓋月；同格多筆相加', () => {
+  const ms = [{ id: 1, nickname: 'A', sort_order: 1, active: true, joined_at: null, left_at: null }] as FundMember[];
+  const rows = [
+    { member_id: 1, months: ['2025-12', '2026-01', '2026-02'], amount: 4500, paid_on: '2026-03-02' },
+    { member_id: 1, months: ['2025-12'], amount: 500, paid_on: '2025-12-20' },
+  ];
+  const g = donationGrid(ms, ['2025-12', '2026-01', '2026-02', '2026-03'], rows, '2026-03-20', 14);
+  assert.deepEqual(g[0].cells, [{ state: 'paid', amount: 5000 }, { state: 'covered' }, { state: 'covered' }, { state: 'unpaid' }]);
 });
 ```
 
 - [ ] **Step 2–4: 失敗 → 實作 → `npm test` 通過**
 - [ ] **Step 5: 頁面**
 
-`/fund-v2/monthly`：不設 RoleGate（全員可看，spec §5.1）。上方 `Chip` 選 6／12 個月；表格第一欄暱稱固定（`sticky left-0`），每月一欄；`paid` 顯示金額（`tabular-nums`，等於 `standard_amount` 用白字、不同用灰字），`unpaid` 顯示紅點＋`aria-label="未繳"`，`na` 顯示 `·`。表格外層 `overflow-x-auto`，375px 可橫向捲動。底部一列各月合計。
+`/fund-v2/monthly`：不設 RoleGate（全員可看，spec §5.1）。上方 `Chip` 選 6／12 個月；表格第一欄暱稱固定（`sticky left-0`），每月一欄；`paid` 顯示金額（`tabular-nums`，白字），`covered` 顯示綠色 `✓`＋`aria-label="已含在另一筆奉納"`，`unpaid` 顯示紅點＋`aria-label="未繳"`，`na` 顯示 `·`。表格下方一行灰字圖例：「✓ 已含在另一筆奉納（一次繳多個月時，金額記在收款那個月）」。表格外層 `overflow-x-auto`，375px 可橫向捲動。底部一列各月合計。
 
-- [ ] **Step 6: 瀏覽器驗證**（控制者）：隨機挑 2 位成員對照舊 `/fund/monthly` 同月份金額一致；`?as=member` 可看；375px 不破版。
+- [ ] **Step 6: 瀏覽器驗證**（控制者）：挑總表第 431、542 列那位成員：2026/1 顯示 4,500、2025/12 與 2026/2 為 ✓；2026/3 顯示 4,500、4 與 5 月為 ✓（舊 `/fund/monthly` 是平均分攤，數字本來就不同，不用對照）；另挑 1 位單月奉納的成員對照舊頁金額一致；`?as=member` 可看；375px 不破版。
 - [ ] **Step 7: Commit** — `feat(fund-v2): monthly donation grid`
 
 ---
@@ -426,7 +444,7 @@ test('roleErrorText', () => {
 ```ts
 // autopay.ts
 export interface NewPayable { title: string; amount: number; due_on: string | null; template_id: number; vendor: string | null; for_month: string; status: 'open' }
-/** due_day 為空 → null；超過該月天數 → 該月最後一天 */
+/** due_day 為空 → null；其餘用 Task 1 的 `dayInMonth` */
 export const dueDate: (month: string, dueDay: number | null) => string | null;
 export const missingPayables: (
   templates: FundTemplate[], month: string,
