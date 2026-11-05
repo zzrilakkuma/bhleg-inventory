@@ -1,0 +1,32 @@
+name: Keep Supabase alive
+
+# Supabase 免費方案閒置 7 天會暫停專案；每 12 小時戳一次 API 維持活動量。
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST directly
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY secrets not set"
+            exit 1
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$SUPABASE_URL/rest/v1/items?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "Supabase responded $status"
+          [ "$status" = "200" ]
+
+      - name: Ping app /api/ping (optional)
+        if: vars.APP_URL != ''
+        run: |
+          curl -fsS "${{ vars.APP_URL }}/api/ping" || echo "::warning::app ping failed (Supabase ping above still counts)"

@@ -20,7 +20,7 @@ const SafeWordInput = ({ value, onChange, required, autoComplete = "new-password
     <div className="relative w-full">
       <input
         type={isPeeking ? 'text' : 'password'}
-        placeholder="> Safe Word:"
+        placeholder="你的密碼："
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}
@@ -132,7 +132,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (safeWord.length < 6) {
-      toast.error('Safe Word 長度至少需要 6 個字元');
+      toast.error('密碼長度至少需要 6 個字元');
       return;
     }
     setIsLoading(true);
@@ -162,7 +162,7 @@ export default function LoginPage() {
       });
 
       if (error || data.error) {
-        toast.error('身份名稱或 Safe Word 錯誤');
+        toast.error('名稱或密碼錯誤');
       } else {
         const { error: sessionError } = await supabase.auth.setSession({
           access_token: data.session.access_token,

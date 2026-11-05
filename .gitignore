@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Obsidian vault workspace state
+巢穴參考資料/.obsidian/workspace*.json
+
+# brainstorming visual companion sessions
+.superpowers/
