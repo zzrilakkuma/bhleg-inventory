@@ -1,0 +1,48 @@
+// 角色管理：成員與 fund_roles 的合併、切換規則、寫入。
+// 不可在模組層級 import 瀏覽器 client 或 next/*。
+import type { FundMember } from '../fund.ts';
+
+export interface RoleRow { member_id: number; nickname: string; user_id: string | null; role: 'accountant' | 'member' }
+
+const LAST = '至少要保留一位會計';
+
+export const roleRows = (
+  members: Pick<FundMember, 'id' | 'nickname' | 'user_id' | 'active'>[],
+  roles: { user_id: string; role: string }[],
+): RoleRow[] => {
+  const acc = new Set(roles.filter((r) => r.role === 'accountant').map((r) => r.user_id));
+  return members.filter((m) => m.active).map((m) => ({
+    member_id: m.id,
+    nickname: m.nickname,
+    user_id: m.user_id,
+    role: m.user_id && acc.has(m.user_id) ? 'accountant' : 'member',
+  }));
+};
+
+export const canChange = (
+  row: RoleRow, to: 'accountant' | 'member', rows: RoleRow[], selfUserId: string,
+): { ok: true } | { ok: false; reason: string } => {
+  if (!row.user_id) return { ok: false, reason: '這位成員還沒有登入帳號' };
+  if (to === 'member' && row.role === 'accountant') {
+    if (row.user_id === selfUserId) return { ok: false, reason: '不能移除自己的會計權限，請由另一位會計操作' };
+    const others = rows.filter((r) => r.role === 'accountant' && r.user_id !== row.user_id);
+    if (others.length === 0) return { ok: false, reason: LAST };
+  }
+  return { ok: true };
+};
+
+export const setRole = async (
+  client: { from: (t: string) => any },
+  userId: string,
+  to: 'accountant' | 'member',
+): Promise<void> => {
+  const { error } = to === 'accountant'
+    ? await client.from('fund_roles').upsert({ user_id: userId, role: 'accountant' })
+    : await client.from('fund_roles').delete().eq('user_id', userId);
+  if (error) throw error;
+};
+
+export const roleErrorText = (e: unknown): string => {
+  const msg = String((e as { message?: unknown } | null)?.message ?? e);
+  return msg.includes(LAST) ? LAST : msg;
+};

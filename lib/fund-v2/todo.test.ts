@@ -4,7 +4,7 @@ import { unpaidMembers, duePayables, todoItems, unpaidListText } from './todo.ts
 import type { FundMember } from '../fund.ts';
 
 const m = (id: number, nickname: string, active = true): FundMember =>
-  ({ id, nickname, real_name: null, role: null, default_last5: null, active, sort_order: id, joined_at: null, left_at: null, exit_note: null });
+  ({ id, nickname, real_name: null, role: null, default_last5: null, active, sort_order: id, joined_at: null, left_at: null, exit_note: null, user_id: null });
 const members = [m(1, 'A'), m(2, 'B'), m(3, 'C'), m(4, 'D', false)];
 
 test('unpaidMembers: empty on or before due day', () => {
