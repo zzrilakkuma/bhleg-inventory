@@ -10,7 +10,7 @@ import type { Refs } from '@/lib/fund-v2/api';
 import { markPayablePaid } from '@/lib/fund-v2/payable';
 import { backdateWarning } from '@/lib/fund-v2/ledger';
 import { nextSeq } from '@/lib/fund-v2/seq';
-import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, selectableStorages } from '@/lib/fund-v2/expense';
+import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, chipPayableId, selectableStorages } from '@/lib/fund-v2/expense';
 import { Chip, SectionLabel } from '../ui';
 import { WaiveSheet, GroupSummarySheet } from './ExpenseSheets';
 
@@ -86,8 +86,10 @@ export default function ExpenseForm({ refs, lastSettledOn, onSaved }: { refs: Re
   // 本月、該範本的 open 應付：點「常用」時改走 ?payable=ID 的既有預填流程（不另開標記已付的路徑）
   const [openPayables, setOpenPayables] = useState<{ id: number; template_id: number | null }[]>([]);
   useEffect(() => {
+    let alive = true;
     supabase.from('fund_payables').select('id, template_id').eq('status', 'open').eq('for_month', curMonth)
-      .then((r) => { if (!r.error) setOpenPayables((r.data ?? []) as { id: number; template_id: number | null }[]); });
+      .then((r) => { if (alive && !r.error) setOpenPayables((r.data ?? []) as { id: number; template_id: number | null }[]); });
+    return () => { alive = false; };
   }, [curMonth, urlPayableId]); // ?payable 變動（含儲存後被清掉）時重讀，避免留下已付的舊項
   const templates = useMemo(() => pendingRecurring(refs.templates, monthExp, curMonth), [refs.templates, monthExp, curMonth]);
 
@@ -191,6 +193,7 @@ export default function ExpenseForm({ refs, lastSettledOn, onSaved }: { refs: Re
           reset(); onSaved(); loadLists();
           return;
         }
+        setOpenPayables((ps) => ps.filter((x) => x.id !== payableId));
         router.replace('/fund-v2/record');
       }
       setPayErr(null);
@@ -220,9 +223,9 @@ export default function ExpenseForm({ refs, lastSettledOn, onSaved }: { refs: Re
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <Chip key={t.id} onClick={() => {
-                const p = openPayables.find((x) => x.template_id === t.id);
-                if (p) router.replace(`/fund-v2/record?payable=${p.id}`);
-                else applyTemplate(t);
+                applyTemplate(t); // 先套範本（含出款科目／墊款人），再由 ?payable 預填覆寫 vendor／金額／說明／標籤
+                const pid = chipPayableId(t, openPayables, detachedFrom, payErr !== null);
+                if (pid !== null) router.replace(`/fund-v2/record?payable=${pid}`);
               }}>
                 {t.name}{t.default_amount != null ? ` ${fmtAmount(Number(t.default_amount))}` : ''}
               </Chip>

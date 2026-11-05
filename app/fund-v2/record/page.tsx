@@ -51,7 +51,7 @@ export default function RecordPage() {
         {!refs && !err && <p className="text-gray-500 text-sm">載入中...</p>}
         {refs && mode === 'expense' && <Suspense fallback={null}><ExpenseForm refs={refs} lastSettledOn={lastSettledOn} onSaved={reloadSnap} /></Suspense>}
         {refs && mode === 'income' && <IncomeForm refs={refs} lastSettledOn={lastSettledOn} onSaved={reloadSnap} />}
-        {refs && mode === 'transfer' && <TransferForm refs={refs} snapshot={snap} lastSettledOn={lastSettledOn} onSaved={reloadSnap} />}
+        {refs && mode === 'transfer' && <TransferForm refs={refs} snapshot={snap} onSaved={reloadSnap} />}
       </div>
     </RoleGate>
   );

@@ -44,9 +44,9 @@ export default function TodoCard({ items, isAccountant, copyText }: {
           if (it.kind === 'group_due') {
             return (
               <li key={`g${i}`}>
-                <Link href="/fund-v2/record" className="block py-2 text-sm text-white">
-                  上個月尚未彙整：{it.names.join('、')}
-                </Link>
+                {isAccountant
+                  ? <Link href="/fund-v2/record" className="block py-2 text-sm text-white">上個月尚未彙整：{it.names.join('、')}</Link>
+                  : <span className="block py-2 text-sm text-white">上個月尚未彙整：{it.names.join('、')}</span>}
               </li>
             );
           }

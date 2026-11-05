@@ -118,3 +118,13 @@ export const selectableStorages = (
     s.name === '郵局' || s.name === '現金' ||
     (grouped && (s.name.startsWith('現金（') || s.id === account!.default_storage_id)));
 };
+
+/** 點「常用」chip 時要改走哪筆應付；null = 照一般範本預填。已脫離的應付或標記失敗警示中不可再接上，以免重複記帳 */
+export const chipPayableId = (
+  template: { id: number }, openPayables: { id: number; template_id: number | null }[],
+  detachedFrom: number | null, hasPayErr: boolean,
+): number | null => {
+  if (hasPayErr) return null;
+  const p = openPayables.find((x) => x.template_id === template.id);
+  return p && p.id !== detachedFrom ? p.id : null;
+};
