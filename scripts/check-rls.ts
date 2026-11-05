@@ -38,20 +38,26 @@ const fail = (table: string, action: string, detail?: string): never => {
 };
 type Res = { error: { code?: string; message?: string } | null; data: unknown[] | null };
 
-// 被拒：error.code 為 42501，或沒有 error 且回傳 0 列。若成功（有列）則先清除再失敗。
-async function expectDenied(table: string, action: string, run: () => PromiseLike<Res>, cleanup?: () => PromiseLike<unknown>) {
+// 被拒：error.code 為 42501，或沒有 error 且 data 為空陣列。data 為 null 視為失敗。
+// 若成功（有列）則先清除再失敗；清除失敗時先印 RLS CLEANUP FAILED。
+async function expectDenied(table: string, action: string, run: () => PromiseLike<Res>, cleanup?: () => PromiseLike<{ error: unknown }>) {
   const r = await run();
   if (r.error) {
     if (r.error.code !== '42501') fail(table, action, `code ${r.error.code ?? 'unknown'}`);
-  } else if (r.data && r.data.length > 0) {
-    if (cleanup) await cleanup();
-    fail(table, action, 'unexpectedly succeeded');
+  } else if (!Array.isArray(r.data) || r.data.length > 0) {
+    if (cleanup) {
+      const c = await cleanup().then((x) => x, () => ({ error: true }));
+      if (c.error) console.error(`RLS CLEANUP FAILED: ${table}`);
+    }
+    fail(table, action, Array.isArray(r.data) ? 'unexpectedly succeeded' : 'no data');
   }
   checks++;
 }
-async function expectReadable(table: string) {
+// requireRows=false 僅用於 fund_emergencies：平常 0 列，空結果是正常的，只能檢查沒有 error。
+async function expectReadable(table: string, requireRows: boolean) {
   const r = await supabase.from(table).select('*').limit(1);
   if (r.error) fail(table, 'select', r.error.code ?? 'error');
+  if (requireRows && (!r.data || r.data.length === 0)) fail(table, 'read', 'no rows');
   checks++;
 }
 
@@ -88,8 +94,9 @@ await expectDenied('fund_payables', 'insert',
 await expectDenied('fund_transactions', 'update', () =>
   supabase.from('fund_transactions').update({ comment: tx.data!.comment }).eq('id', tx.data!.id).select('id'));
 
-for (const t of ['fund_settings', 'fund_emergencies', 'fund_donations', 'fund_tx_snapshots']) {
-  await expectReadable(t);
-}
+await expectReadable('fund_settings', true);
+await expectReadable('fund_emergencies', false);
+await expectReadable('fund_donations', true);
+await expectReadable('fund_tx_snapshots', true);
 
 console.log(`RLS OK (${checks} checks)`);
