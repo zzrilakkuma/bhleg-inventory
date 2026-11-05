@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase-client';
 import { insertTransaction } from '@/lib/fund-db';
 import { fmtAmount, TAG_GROUP_LABEL, type FundExpense, type FundTag, type FundTemplate } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
+import { markPayablePaid } from '@/lib/fund-v2/payable';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { buildExpenseWrite, expenseImpact, guessTags, pendingRecurring, selectableStorages } from '@/lib/fund-v2/expense';
 import { Chip, SectionLabel } from '../ui';
@@ -23,7 +24,9 @@ type RecentExpense = FundExpense;
 
 export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: () => void }) {
   const router = useRouter();
-  const payableId = Number(useSearchParams().get('payable')) || null;
+  const urlPayableId = Number(useSearchParams().get('payable')) || null;
+  const [detached, setDetached] = useState(false); // 標記失敗後脫離應付模式
+  const payableId = detached ? null : urlPayableId;
   const mainAccount = refs.accounts.find((a) => a.kind === 'main') ?? refs.accounts[0];
   const advancers = refs.advancers.filter((a) => a.active);
 
@@ -159,14 +162,14 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
       });
       const saved = await insertTransaction(w.tx, w.lines, w.sub);
       if (payableId) {
-        const u = await supabase.from('fund_payables').update({ status: 'paid', paid_transaction_id: saved.id })
-          .eq('id', payableId).eq('status', 'open').select('id');
-        if (u.error || !u.data || u.data.length === 0) {
-          setPayErr(`已記帳（交易 #${saved.id}），但應付 #${payableId} 沒有標記為已付${u.error ? `：${u.error.message}` : '（可能已被處理）'}。請到應付頁手動處理，勿重複記帳。`);
-        } else {
-          setPayErr(null);
-          router.replace('/fund-v2/record');
+        const r = await markPayablePaid(supabase, payableId, saved.id);
+        if (!r.ok) {
+          setDetached(true);
+          setPayErr(`已記帳（交易 #${saved.id}），但應付 #${payableId} 沒有標記為已付：${r.reason}。請到應付頁手動處理，勿重複記帳。`);
+          onSaved();
+          return;
         }
+        router.replace('/fund-v2/record');
       }
       toast.success('已記下');
       reset(); onSaved(); loadLists();
@@ -185,7 +188,9 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
 
   return (
     <div>
-      {payErr && <div role="alert" className="mb-4 rounded border border-[#FF0055] p-3 text-sm text-[#FF0055]">{payErr}</div>}
+      {payErr && <div role="alert" className="mb-4 rounded border border-[#FF0055] p-3 text-sm text-[#FF0055]"><div>{payErr}</div>
+        <button type="button" onClick={() => setPayErr(null)} className="mt-2 px-3 py-1 rounded border border-[#FF0055]">知道了</button>
+      </div>}
       {templates.length > 0 && (
         <>
           <SectionLabel>常用</SectionLabel>
@@ -263,7 +268,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
           ? '帳外（先墊付）：0'
           : preview === 0 ? '本筆對不凍結零用金：0' : `本筆對不凍結零用金：−${fmtAmount(Math.abs(preview))}`}
       </div>
-      <button type="button" disabled={!ready || busy} onClick={submit}
+      <button type="button" disabled={!ready || busy || !!payErr} onClick={submit}
         className="w-full mt-2 py-3 rounded border border-[#00FF41] text-[#00FF41] text-base disabled:opacity-40">
         {busy ? '寫入中...' : '記下'}
       </button>
