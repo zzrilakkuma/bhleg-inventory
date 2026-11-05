@@ -166,7 +166,7 @@ export default function ExpenseForm({ refs, onSaved }: { refs: Refs; onSaved: ()
         if (!r.ok) {
           setDetached(true);
           setPayErr(`已記帳（交易 #${saved.id}），但應付 #${payableId} 沒有標記為已付：${r.reason}。請到應付頁手動處理，勿重複記帳。`);
-          onSaved();
+          reset(); onSaved(); loadLists();
           return;
         }
         router.replace('/fund-v2/record');
