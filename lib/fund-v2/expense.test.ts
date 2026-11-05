@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  pendingRecurring, chipPayableId, guessTags, buildExpenseWrite, expenseImpact, buildGroupSummaryWrite, groupSummaryDefaultDate,
+  pendingRecurring, chipPayableId, chipAction, guessTags, buildExpenseWrite, expenseImpact, buildGroupSummaryWrite, groupSummaryDefaultDate,
 } from './expense.ts';
 import type { FundTemplate, FundExpense, FundAccount, FundStorage, FundAdvancer } from '../fund.ts';
 import type { Refs } from './api.ts';
@@ -115,4 +115,15 @@ test('chipPayableId', () => {
   assert.equal(chipPayableId({ id: 1 }, ps, 9, false), null);
   assert.equal(chipPayableId({ id: 1 }, ps, 8, false), 9);
   assert.equal(chipPayableId({ id: 1 }, ps, null, true), null);
+  assert.equal(chipPayableId({ id: 1 }, ps, null, false, new Set([9])), null);
+  assert.equal(chipPayableId({ id: 1 }, ps, null, false, new Set([7])), 9);
+});
+
+test('chipAction', () => {
+  assert.equal(chipAction(9, 9, 9), 'noop');
+  assert.equal(chipAction(9, null, null), 'attach');
+  assert.equal(chipAction(9, 8, 8), 'attach');
+  assert.equal(chipAction(null, 8, 8), 'detach');
+  assert.equal(chipAction(null, null, 8), 'detach'); // 已脫離但網址仍掛著
+  assert.equal(chipAction(null, null, null), 'template');
 });
