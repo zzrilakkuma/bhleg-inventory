@@ -37,7 +37,7 @@ export default function Emergency() {
 
   const declare = async () => {
     if (!list || busy) return;
-    const v = validateDeclare(list, startedOn, note);
+    const v = validateDeclare(list, startedOn, note, todayISO());
     if (!v.ok) { setFieldErr(v.reason); return; }
     setBusy(true); setFieldErr(null);
     try {

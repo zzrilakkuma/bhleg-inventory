@@ -16,7 +16,7 @@ export default function EmergencyBanner() {
     const load = () => {
       getEmergencies(supabase)
         .then((list) => { if (alive) setOpen(openEmergency(list)); })
-        .catch(() => { if (alive) setOpen(null); });
+        .catch(() => { /* 暫時讀取失敗：保留上次的狀態，不讓進行中的緊急狀態橫幅消失 */ });
     };
     load();
     window.addEventListener(EMERGENCY_CHANGED, load);

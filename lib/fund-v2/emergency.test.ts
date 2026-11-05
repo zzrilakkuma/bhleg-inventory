@@ -8,10 +8,13 @@ test('openEmergency', () => {
   assert.equal(openEmergency([E({ id: 2 }), E({ id: 1, ended_on: '2026-01-01' })])!.id, 2);
 });
 test('validateDeclare', () => {
-  assert.deepEqual(validateDeclare([E({})], '2026-12-01', 'x'), { ok: false, reason: '已有進行中的緊急狀態，請先結束' });
-  assert.deepEqual(validateDeclare([], '2026-12-01', '  '), { ok: false, reason: '請填寫動機與措施' });
-  assert.deepEqual(validateDeclare([], '', 'x'), { ok: false, reason: '請選擇開始日' });
-  assert.equal(validateDeclare([E({ ended_on: '2026-11-10' })], '2026-12-01', 'x').ok, true);
+  const T = '2026-12-01';
+  assert.deepEqual(validateDeclare([E({})], '2026-12-01', 'x', T), { ok: false, reason: '已有進行中的緊急狀態，請先結束' });
+  assert.deepEqual(validateDeclare([], '2026-12-01', '  ', T), { ok: false, reason: '請填寫動機與措施' });
+  assert.deepEqual(validateDeclare([], '', 'x', T), { ok: false, reason: '請選擇開始日' });
+  assert.equal(validateDeclare([E({ ended_on: '2026-11-10' })], '2026-12-01', 'x', T).ok, true);
+  assert.deepEqual(validateDeclare([], '2026-12-02', 'x', T), { ok: false, reason: '開始日不能晚於今天' });
+  assert.equal(validateDeclare([], '2026-11-20', 'x', T).ok, true);
 });
 test('validateEnd', () => {
   assert.deepEqual(validateEnd(E({}), '2026-11-04'), { ok: false, reason: '結束日不能早於開始日' });

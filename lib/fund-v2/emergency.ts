@@ -13,9 +13,10 @@ export const openEmergency = (list: Emergency[]): Emergency | null => list.find(
 
 type Verdict = { ok: true } | { ok: false; reason: string };
 
-export const validateDeclare = (list: Emergency[], startedOn: string, note: string): Verdict => {
+export const validateDeclare = (list: Emergency[], startedOn: string, note: string, today: string): Verdict => {
   if (openEmergency(list)) return { ok: false, reason: '已有進行中的緊急狀態，請先結束' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startedOn)) return { ok: false, reason: '請選擇開始日' };
+  if (startedOn > today) return { ok: false, reason: '開始日不能晚於今天' };
   if (!note.trim()) return { ok: false, reason: '請填寫動機與措施' };
   return { ok: true };
 };
