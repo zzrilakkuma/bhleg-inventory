@@ -13,10 +13,13 @@ export const dueDate = (month: string, dueDay: number | null): string | null =>
 
 export const missingPayables = (
   templates: FundTemplate[], month: string,
-  existing: { template_id: number | null; for_month: string | null }[],
+  existing: { template_id: number | null; for_month: string | null; status?: string }[],
   expensedVendors: Set<string>,
 ): NewPayable[] => {
-  const have = new Set(existing.filter((e) => e.for_month === month).map((e) => e.template_id));
+  // 本月已有的，或手動從固定項目帶入、未標月份但仍未付的，都算已存在
+  const have = new Set(existing
+    .filter((e) => e.for_month === month || (e.for_month === null && e.status === 'open'))
+    .map((e) => e.template_id));
   const m = Number(month.slice(5, 7));
   const out: NewPayable[] = [];
   for (const t of templates) {

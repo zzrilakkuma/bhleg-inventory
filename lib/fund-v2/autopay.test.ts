@@ -18,6 +18,16 @@ test('missingPayables：只產生有預設金額、尚未建立、本月未支�
   assert.deepEqual(out, [{ title: '11月 華南貸款', amount: 17434, due_on: null, template_id: 1, vendor: '華南 貸款', for_month: '2026-11', status: 'open' }]);
 });
 
+test('missingPayables：手動帶入、未標月份的 open 應付算已存在；已付/取消的不算', () => {
+  const ts = [T({}), T({ id: 2, name: '電費' }), T({ id: 3, name: '水費' })];
+  const out = missingPayables(ts, '2026-11', [
+    { template_id: 1, for_month: null, status: 'open' },
+    { template_id: 2, for_month: null, status: 'paid' },
+    { template_id: 3, for_month: null, status: 'cancelled' },
+  ], new Set());
+  assert.deepEqual(out.map((p) => p.template_id), [2, 3]);
+});
+
 test('missingPayables：非固定模板與 due_day 帶入', () => {
   const out = missingPayables([T({ recurring: false }), T({ id: 2, due_day: 5 })], '2026-11', [], new Set());
   assert.equal(out.length, 1);

@@ -66,7 +66,8 @@ export default function SettlePage() {
     ensured.current = true;
     (async () => {
       const [ex, exp] = await Promise.all([
-        supabase.from('fund_payables').select('template_id, for_month').eq('for_month', curMonth),
+        supabase.from('fund_payables').select('template_id, for_month, status')
+          .or(`for_month.eq.${curMonth},and(for_month.is.null,status.eq.open,template_id.not.is.null)`),
         supabase.from('fund_expenses').select('vendor, fund_transactions!fund_expenses_transaction_id_fkey!inner(occurred_on)')
           .gte('fund_transactions.occurred_on', `${curMonth}-01`).lt('fund_transactions.occurred_on', `${nextMonth(curMonth)}-01`),
       ]);
@@ -74,7 +75,7 @@ export default function SettlePage() {
       if (exp.error) throw exp.error;
       const vendors = new Set<string>((exp.data ?? []).map((x: { vendor: string | null }) => x.vendor).filter((v): v is string => !!v));
       const rows = missingPayables(data.refs.templates, curMonth,
-        (ex.data ?? []) as { template_id: number | null; for_month: string | null }[], vendors);
+        (ex.data ?? []) as { template_id: number | null; for_month: string | null; status: string }[], vendors);
       if (await ensureMonthlyPayables(supabase, rows) > 0) {
         const fresh = await getOpenPayables(supabase);
         setData((d) => (d ? { ...d, payables: fresh as Payable[] } : d));

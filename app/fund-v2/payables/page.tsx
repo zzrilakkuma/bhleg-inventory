@@ -54,7 +54,10 @@ export default function PayablesPage() {
       const { error } = await supabase.from('fund_payables').insert({
         title: title.trim(), amount: Number(amount), due_on: dueOn || null, vendor: vendor.trim() || null,
         template_id: tplId, status: 'open', note: null, created_by: u?.user?.id ?? null,
+        // 從固定項目帶入時標上月份，「算」自動產生時才認得這筆，不會再開第二筆
+        for_month: tplId != null ? (dueOn ? dueOn.slice(0, 7) : todayISO().slice(0, 7)) : null,
       });
+      if (error?.code === '23505' && tplId != null) { toast.error('這個固定項目本月已經有一筆應付'); return; }
       if (error) throw error;
       toast.success('已新增');
       setTitle(''); setAmount(''); setDueOn(''); setVendor(''); setTplId(null); setAdding(false);
