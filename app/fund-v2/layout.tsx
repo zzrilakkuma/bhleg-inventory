@@ -44,7 +44,7 @@ export default function FundV2Layout({ children }: { children: React.ReactNode }
           ))}
           <div className="mt-4 flex flex-col gap-1 text-xs">
             <Link href="/fund-v2/stats" aria-current={active('/fund-v2/stats') ? 'page' : undefined} className={`px-3 py-1 ${active('/fund-v2/stats') ? 'text-[#00FF41]' : 'text-gray-500 hover:text-white'}`}>統計</Link>
-            <Link href="/fund/manage" className="px-3 py-1 text-gray-500 hover:text-white">設定</Link>
+            <Link href="/fund-v2/settings" className="px-3 py-1 text-gray-500 hover:text-white">設定</Link>
           </div>
         </aside>
         <main className="flex-1 min-w-0">

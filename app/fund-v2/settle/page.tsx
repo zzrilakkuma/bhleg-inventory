@@ -8,6 +8,7 @@ import {
   getRefs, getPeriods, getPeriodSummaries, getOpenPayables, getUnclaimedExpenses,
   type Refs, type FundPeriod, type PeriodSummary, type UnclaimedExpense,
 } from '@/lib/fund-v2/api';
+import { parseSettings } from '@/lib/fund-v2/settings';
 import { useRole } from '@/lib/fund-v2/role';
 import { duePayables, todoItems, unpaidMembers, unpaidListText, type PayableLike } from '@/lib/fund-v2/todo';
 import { Card } from '../ui';
@@ -51,7 +52,7 @@ export default function SettlePage() {
   const isAccountant = role === 'accountant';
   const view = useMemo(() => {
     if (!data) return null;
-    const dueDay = Number(data.refs.settings.donation_due_day ?? 14);
+    const dueDay = parseSettings(data.refs.settings).donation_due_day;
     const unpaid = unpaidMembers(data.refs.members.filter((m) => m.active), data.donations, today, dueDay);
     return {
       items: todoItems({ payables: duePayables(data.payables, today), unclaimed: data.unclaimed, unpaid }),
@@ -89,9 +90,9 @@ export default function SettlePage() {
             </Card>
           </Link>
           <div className="flex justify-center gap-4 mt-6 text-sm text-gray-400">
-            <Link href="/fund/manage" className="py-2 px-2 hover:text-white">設定</Link>
+            <Link href="/fund-v2/settings" className="py-2 px-2 hover:text-white">設定</Link>
             <span className="py-2 text-gray-600">｜</span>
-            <Link href="/fund/manage" className="py-2 px-2 hover:text-white">成員</Link>
+            <Link href="/fund-v2/settings#members" className="py-2 px-2 hover:text-white">成員</Link>
             <span className="py-2 text-gray-600">｜</span>
             <Link href="/fund/manage" className="py-2 px-2 hover:text-white">科目</Link>
           </div>

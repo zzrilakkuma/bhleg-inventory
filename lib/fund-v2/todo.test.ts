@@ -11,6 +11,10 @@ test('unpaidMembers: empty on or before due day', () => {
   assert.deepEqual(unpaidMembers(members, [], new Date(2026, 10, 14), 14), []);
   assert.deepEqual(unpaidMembers(members, [], new Date(2026, 10, 5), 14), []);
 });
+test('unpaidMembers: 2 月截止日 31 → 月底 28 日當天不算逾期、之後才算', () => {
+  assert.deepEqual(unpaidMembers(members, [], new Date(2026, 1, 28), 31), []);
+  assert.ok(unpaidMembers(members, [], new Date(2027, 1, 28), 27).length > 0);
+});
 test('unpaidMembers: after due day lists active members without donation this month', () => {
   const don = [{ member_id: 1, months: ['2026-11'] }, { member_id: 2, months: ['2026-10'] }];
   const r = unpaidMembers(members, don, new Date(2026, 10, 15), 14);

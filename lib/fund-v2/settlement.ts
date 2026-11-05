@@ -1,9 +1,10 @@
 // 算 — 四步結算精靈：純函式（請款、還款、凍存、結算寫入、期別、延後天數、公布文字）。
 import {
-  buildRepaymentTexts, buildSettlementTexts, formatSnapshot, FREEZE_RATE, monthLabel, storageOutTag,
+  buildRepaymentTexts, buildSettlementTexts, formatSnapshot, monthLabel, storageOutTag,
   type FundStorage,
 } from '../fund.ts';
 import type { NewTransaction, NewLine } from '../fund-db.ts';
+import { dayInMonth, type FundSettings } from './settings.ts';
 import type { Refs, Snapshot, UnclaimedExpense, OutstandingLoan, FundPeriod } from './api.ts';
 
 type R = Pick<Refs, 'accounts' | 'storages'>;
@@ -64,8 +65,8 @@ export const step1Delta = (expenses: UnclaimedExpense[], repayments: { amount: n
   - repayments.filter((r) => r.amount > 0).reduce((s, r) => s + r.amount + r.fee, 0);
 
 /** 凍存：floor(base × rate) 各一筆；base ≤ 0 → 0/0。base 預設為不凍結零用金。 */
-export const computeFreeze = (mainAfterClaims: number, settings: Record<string, unknown>, total?: number) => {
-  const rate = Number(settings.freeze_rate ?? FREEZE_RATE);
+export const computeFreeze = (mainAfterClaims: number, settings: FundSettings, total?: number) => {
+  const rate = settings.freeze_rate;
   const base = settings.freeze_base === 'total' && total != null ? total : mainAfterClaims;
   const n = base > 0 && rate > 0 ? Math.floor(base * rate) : 0;
   return { base, reserve: n, future: n };
@@ -79,9 +80,9 @@ const utc = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return Date.UTC(y, m - 1, d);
 };
-/** max(0, 結算日 − <month>-<dueDay>) */
+/** max(0, 結算日 − <month>-<dueDay>)；該月沒有那一天則以月底計 */
 export const lateDays = (month: string, date: string, dueDay: number) =>
-  Math.max(0, Math.round((utc(date) - utc(`${month}-${String(dueDay).padStart(2, '0')}`)) / 86400000));
+  Math.max(0, Math.round((utc(date) - utc(`${month}-${String(dayInMonth(month, dueDay)).padStart(2, '0')}`)) / 86400000));
 
 /** 把明細套到快照上（預覽用）。 */
 export const applyLines = (s: Snapshot, lines: NewLine[], refs: R): Snapshot => {
@@ -113,7 +114,7 @@ export interface SettlementInput {
   system: { post: number; cash: number };
   actual: { post: number; cash: number };
   repayments: { lender: string; amount: number; fee: number; remaining: number }[];
-  refs: R; settings: Record<string, unknown>;
+  refs: R; settings: FundSettings;
 }
 
 /** 凍存 ＋ 矯正回歸 的明細（不含驗證）。 */
@@ -150,7 +151,7 @@ export const buildSettlementWrite = (i: SettlementInput): { tx: NewTransaction; 
     repayments: i.repayments, leftover,
     extraNote: !frozen && reason !== DEFAULT_ZERO_REASON ? `#${reason}` : '',
   });
-  const dueDay = Number(i.settings.settlement_due_day ?? 20);
+  const dueDay = i.settings.settlement_due_day;
   return {
     tx: { type: 'settlement', occurred_on: i.date, seq: i.seq, ...t, amount: 0, comment: null },
     lines,

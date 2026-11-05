@@ -5,10 +5,11 @@ import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
 import { insertTransaction } from '@/lib/fund-db';
 import {
-  fmtAmount, INCOME_SOURCE_LABEL, memberDisplayName, MONTHLY_CAP, recentMonths, STANDARD_AMOUNT,
+  fmtAmount, INCOME_SOURCE_LABEL, memberDisplayName, recentMonths,
   monthLabel, type IncomeSource,
 } from '@/lib/fund';
 import type { Refs } from '@/lib/fund-v2/api';
+import { parseSettings } from '@/lib/fund-v2/settings';
 import { nextSeq } from '@/lib/fund-v2/seq';
 import { selectableStorages } from '@/lib/fund-v2/expense';
 import { allocationLines, buildIncomeWrite, monthlyCapWarning } from '@/lib/fund-v2/income';
@@ -31,7 +32,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
   const storages = useMemo(() => selectableStorages(refs.storages, mainAccount), [refs.storages, mainAccount]);
   const post = storages.find((s) => s.name === '郵局');
   const cashSt = storages.find((s) => s.name === '現金');
-  const cap = Number(refs.settings.monthly_cap) || MONTHLY_CAP;
+  const { monthly_cap: cap, standard_amount: standardAmount } = useMemo(() => parseSettings(refs.settings), [refs.settings]);
   const curMonth = today().slice(0, 7);
   const monthOptions = useMemo(() => recentMonths(3), []);
 
@@ -152,7 +153,7 @@ export default function IncomeForm({ refs, onSaved }: { refs: Refs; onSaved: () 
         className={`${inputCls} text-2xl py-3 tabular-nums`} />
       {isDonation && (
         <div className="flex gap-2 mt-2">
-          <Chip on={amt === STANDARD_AMOUNT} onClick={() => setAmount(String(STANDARD_AMOUNT))}>{fmtAmount(STANDARD_AMOUNT)}</Chip>
+          <Chip on={amt === standardAmount} onClick={() => setAmount(String(standardAmount))}>{fmtAmount(standardAmount)}</Chip>
         </div>
       )}
       {isDonation && months.length === 0 && <p className="text-yellow-400 text-sm mt-2">請選至少一個月</p>}

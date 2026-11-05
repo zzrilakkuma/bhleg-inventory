@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase-client';
 import { deleteTransaction, insertTransaction } from '@/lib/fund-db';
-import { FREEZE_RATE, monthLabel } from '@/lib/fund';
+import { monthLabel } from '@/lib/fund';
+import { parseSettings } from '@/lib/fund-v2/settings';
 import {
   getRefs, getLatestSnapshot, getPeriods, getUnclaimedExpenses, getOutstandingLoans,
   type Refs, type Snapshot, type UnclaimedExpense, type OutstandingLoan,
@@ -92,9 +93,9 @@ function Wizard() {
     () => (refs?.storages ?? []).filter((s) => s.active && (s.name === '郵局' || s.name === '現金')), [refs]);
   const post = storages.find((s) => s.name === '郵局');
   const cash = storages.find((s) => s.name === '現金');
-  const settings = useMemo(() => refs?.settings ?? {}, [refs]);
-  const dueDay = Number(settings.settlement_due_day ?? 20);
-  const rate = Number(settings.freeze_rate ?? FREEZE_RATE);
+  const settings = useMemo(() => parseSettings(refs?.settings ?? {}), [refs]);
+  const dueDay = settings.settlement_due_day;
+  const rate = settings.freeze_rate;
   const late = lateDays(month, date, dueDay);
 
   const charter = useMemo(() => computeFreeze(snap?.main ?? 0, settings, snap?.total), [snap, settings]);
